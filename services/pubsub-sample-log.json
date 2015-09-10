@@ -1,0 +1,18 @@
+{
+  "metadata": {
+    "projectId": "cloud-solutions-group",
+    "serviceName": "compute.googleapis.com",
+    "zone": "us-central1-b",
+    "labels": {
+      "compute.googleapis.com/resource_id": "4073713909730487365",
+      "compute.googleapis.com/resource_type": "instance"
+    },
+    "timestamp": "2015-08-20T04:10:36Z"
+  },
+  "insertId": "2015-08-19|21:10:38.786921-07|10.106.139.141|839059640",
+  "log": "kubernetes.home-service-6zn8v_default_sample-home-service",
+  "structPayload": {
+    "stream": "stdout",
+    "log": "[GIN] 2015/08/20 - 04:10:36 |\u001b[97;42m 200 \u001b[0m|      54.792µs | 10.240.178.196:51491 |\u001b[97;44m  \u001b[0m GET     /home\n"
+  }
+}
