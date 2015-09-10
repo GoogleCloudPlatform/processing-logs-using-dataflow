@@ -3,3 +3,4 @@ home-service
 browse-service
 locate-service
 .idea
+*.iml
