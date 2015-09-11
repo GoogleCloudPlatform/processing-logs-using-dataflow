@@ -1,6 +1,5 @@
 package com.google.cloud.solutions;
 
-import com.google.api.services.bigquery.model.TableCell;
 import com.google.api.services.bigquery.model.TableFieldSchema;
 import com.google.api.services.bigquery.model.TableRow;
 import com.google.api.services.bigquery.model.TableSchema;
@@ -124,12 +123,20 @@ public class LogAnalyticsPipeline {
             Matcher m = p.matcher(log.getAsString());
 
             DateTimeFormatter fmt = DateTimeFormat.forPattern("yyy/MM/dd - HH:mm:ss");
-            Instant timestamp = fmt.parseDateTime(m.group(1)).toInstant();
-            int httpStatusCode = Integer.valueOf(m.group(2));
-            double responseTime = Double.valueOf(m.group(3)) / 1000000;
-            String source = m.group(4);
-            String httpMethod = m.group(5);
-            String destination = m.group(6);
+            Instant timestamp = fmt.parseDateTime(m.group("timestamp")).toInstant();
+            int httpStatusCode = Integer.valueOf(m.group("httpStatusCode"));
+
+            double responseTime = 0;
+            if(m.group("resolution") == "µs") {
+                responseTime = Double.valueOf(m.group("responseTime")) / 1000000;
+            }
+            else if(m.group("resolution") == "ms") {
+                responseTime = Double.valueOf(m.group("responseTime")) / 1000;
+            }
+
+            String source = m.group("source");
+            String httpMethod = m.group("httpMethod");
+            String destination = m.group("destination");
 
             return new LogEntry(timestamp, httpStatusCode, responseTime, source, httpMethod, destination);
         }
@@ -139,16 +146,16 @@ public class LogAnalyticsPipeline {
         @Override
         public void processElement(ProcessContext c) {
             LogEntry e = c.element();
-            List<TableCell> cells = new ArrayList<TableCell>();
 
-            cells.add(new TableCell().set("timestamp", e.getTimestamp().toDateTime()));
-            cells.add(new TableCell().set("httpStatusCode", e.getHttpStatusCode()));
-            cells.add(new TableCell().set("responseTime", e.getResponseTime()));
-            cells.add(new TableCell().set("source", e.getSource()));
-            cells.add(new TableCell().set("httpMethod", e.getHttpMethod()));
-            cells.add(new TableCell().set("destination", e.getDestination()));
+            TableRow row = new TableRow()
+              .set("timestamp", e.getTimestamp().toDateTime())
+              .set("httpStatusCode", e.getHttpStatusCode())
+              .set("responseTime", e.getResponseTime())
+              .set("source", e.getSource())
+              .set("httpMethod", e.getHttpMethod())
+              .set("destination", e.getDestination());
 
-            c.output(new TableRow().setF(cells));
+            c.output(row);
         }
     }
 
@@ -156,12 +163,12 @@ public class LogAnalyticsPipeline {
         @Override
         public void processElement(ProcessContext c) {
             KV<String,Double> e = c.element();
-            List<TableCell> cells = new ArrayList<TableCell>();
 
-            cells.add(new TableCell().set("destination", e.getKey()));
-            cells.add(new TableCell().set("responseTime", e.getValue()));
+            TableRow row = new TableRow()
+              .set("destination", e.getKey())
+              .set("responseTime", e.getValue());
 
-            c.output(new TableRow().setF(cells));
+            c.output(row);
         }
     }
 
