@@ -2,9 +2,6 @@ package com.google.cloud.solutions;
 
 import org.joda.time.Instant;
 
-/**
- * Created by parikhs on 9/10/15.
- */
 class LogEntry {
     private Instant timestamp;
     private int httpStatusCode;
