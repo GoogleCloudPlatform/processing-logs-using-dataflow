@@ -6,14 +6,13 @@ import com.google.api.services.bigquery.model.TableSchema;
 import com.google.cloud.dataflow.sdk.Pipeline;
 import com.google.cloud.dataflow.sdk.PipelineResult;
 import com.google.cloud.dataflow.sdk.io.BigQueryIO;
-import com.google.cloud.dataflow.sdk.io.PubsubIO;
 import com.google.cloud.dataflow.sdk.io.TextIO;
 import com.google.cloud.dataflow.sdk.options.DataflowPipelineOptions;
 import com.google.cloud.dataflow.sdk.options.DataflowWorkerLoggingOptions;
 import com.google.cloud.dataflow.sdk.options.Description;
 import com.google.cloud.dataflow.sdk.options.PipelineOptionsFactory;
 import com.google.cloud.dataflow.sdk.transforms.*;
-import com.google.cloud.dataflow.sdk.transforms.windowing.CalendarWindows;
+import com.google.cloud.dataflow.sdk.transforms.windowing.FixedWindows;
 import com.google.cloud.dataflow.sdk.transforms.windowing.Window;
 import com.google.cloud.dataflow.sdk.values.KV;
 import com.google.cloud.dataflow.sdk.values.PCollection;
@@ -21,6 +20,7 @@ import com.google.cloud.dataflow.sdk.values.PCollectionList;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import org.joda.time.Duration;
 import org.joda.time.Instant;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
@@ -203,13 +203,13 @@ public class LogAnalyticsPipeline {
         Pipeline p = Pipeline.create(options);
 
         // PCollection from
-        // - PubSubIO source
+        // - Cloud Storage source
         // - Extract individual LogEntry objects from each PubSub CloudLogging message (structPayload.log)
         // - Change windowing from Global to 1 day fixed windows
         PCollection<LogEntry> homeLogsDaily = p
-          .apply(PubsubIO.Read.subscription(props.getProperty("homeLogSource")))
-          .apply(ParDo.of(new EmitLogEntryFn(false, logRegexPattern)))
-          .apply(Window.<LogEntry>into(CalendarWindows.days(1)));
+          .apply(TextIO.Read.from(props.getProperty("homeLogSource")))
+          .apply(ParDo.named("homeLogsToLogEntry").of(new EmitLogEntryFn(true, logRegexPattern)))
+          .apply(Window.named("homeLogEntryToDaily").<LogEntry>into(FixedWindows.of(Duration.standardDays(1))));
 
         // PCollection from
         // - Cloud Storage source
@@ -217,8 +217,8 @@ public class LogAnalyticsPipeline {
         // - Change windowing from "all" to 1 day fixed windows
         PCollection<LogEntry> browseLogsDaily = p
           .apply(TextIO.Read.from(props.getProperty("browseLogSource")))
-          .apply(ParDo.of(new EmitLogEntryFn(true, logRegexPattern)))
-          .apply(Window.<LogEntry>into(CalendarWindows.days(1)));
+          .apply(ParDo.named("browseLogsToLogEntry").of(new EmitLogEntryFn(true, logRegexPattern)))
+          .apply(Window.named("browseLogEntryToDaily").<LogEntry>into(FixedWindows.of(Duration.standardDays(1))));
 
         // PCollection from
         // - Cloud Storage source
@@ -226,8 +226,8 @@ public class LogAnalyticsPipeline {
         // - Change windowing from "all" to 1 day fixed windows
         PCollection<LogEntry> locateLogsDaily = p
           .apply(TextIO.Read.from(props.getProperty("locateLogSource")))
-          .apply(ParDo.of(new EmitLogEntryFn(true, logRegexPattern)))          
-          .apply(Window.<LogEntry>into(CalendarWindows.days(1)));
+          .apply(ParDo.named("locateLogsToLogEntry").of(new EmitLogEntryFn(true, logRegexPattern)))
+          .apply(Window.named("locateLogEntryToDaily").<LogEntry>into(FixedWindows.of(Duration.standardDays(1))));
 
         // Create a single PCollection by flattening three (windowed) PCollections
         PCollection<LogEntry> logCollection = PCollectionList
@@ -238,13 +238,14 @@ public class LogAnalyticsPipeline {
 
         // Create new PCollection containing LogEntry->TableRow
         PCollection<TableRow> logsAsTableRows = logCollection
-          .apply(ParDo.of(new LogEntryTableRowFn()));
+          .apply(ParDo.named("logEntryToTableRow").of(new LogEntryTableRowFn()));
 
         // Output TableRow PCollection into BigQuery
         // - Append all writes to existing rows
         // - Create the table if it does not exist already
         TableSchema allLogsTableSchema = createTableSchema(props.getProperty("allLogsTableSchema"));
         logsAsTableRows.apply(BigQueryIO.Write
+          .named("allLogsToBigQuery")
           .to(props.getProperty("allLogsTableName"))
           .withSchema(allLogsTableSchema)
           .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_APPEND)
@@ -254,7 +255,7 @@ public class LogAnalyticsPipeline {
         // - Contains "destination,responseTime" key-value pairs
         // - Used for running simple aggregations
         PCollection<KV<String,Double>> destResponseTimeCollection = logCollection
-          .apply(ParDo.of(new DoFn<LogEntry, KV<String, Double>>() {
+          .apply(ParDo.named("logEntryToDestRespTime").of(new DoFn<LogEntry, KV<String, Double>>() {
               @Override
               public void processElement(ProcessContext processContext) throws Exception {
                   LogEntry l = processContext.element();
@@ -267,11 +268,12 @@ public class LogAnalyticsPipeline {
         // - Convert the result into PCollection of TableRow
         PCollection<TableRow> destMaxRespTimeRows = destResponseTimeCollection
           .apply(Combine.<String,Double,Double>perKey(new Max.MaxDoubleFn()))
-          .apply(ParDo.of(new AggregateTableRowFn()));
+          .apply(ParDo.named("maxRespTimeToTableRow").of(new AggregateTableRowFn()));
 
         // Output destination->maxResponseTime PCollection to BigQuery
         TableSchema maxRespTimeTableSchema = createTableSchema(props.getProperty("maxRespTimeTableSchema"));
         destMaxRespTimeRows.apply(BigQueryIO.Write
+          .named("maxRespTimeToBigQuery")
           .to(props.getProperty("maxRespTimeTableName"))
           .withSchema(maxRespTimeTableSchema)
           .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_APPEND)
@@ -282,11 +284,12 @@ public class LogAnalyticsPipeline {
         // - Convert the result into PCollection of TableRow
         PCollection<TableRow> destMeanRespTimeRows = destResponseTimeCollection
           .apply(Mean.<String,Double>perKey())
-          .apply(ParDo.of(new AggregateTableRowFn()));
+          .apply(ParDo.named("meanRespTimeToTableRow").of(new AggregateTableRowFn()));
 
         // Output destination->meanResponseTime PCollection to BigQuery
         TableSchema meanRespTimeTableSchema = createTableSchema(props.getProperty("meanRespTimeTableSchema"));
         destMeanRespTimeRows.apply(BigQueryIO.Write
+          .named("meanRespTimeToBigQuery")
           .to(props.getProperty("meanRespTimeTableName"))
           .withSchema(meanRespTimeTableSchema)
           .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_APPEND)
