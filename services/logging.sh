@@ -3,11 +3,6 @@
 set -e
 
 PROJECT_ID=${2}
-HOME_LOGS=${3}
-BROWSE_LOGS=${4}
-LOCATE_LOGS=${5}
-
-PUBSUB_TOPIC="projects/${PROJECT_ID}/topics/${HOME_LOGS}"
 TEMPLATE="{{(index .items 0).metadata.name}}_{{(index .items 0).metadata.namespace}}_{{(index ((index .items 0).spec.containers) 0).name}}"
 
 function error_exit
@@ -18,16 +13,18 @@ function error_exit
 
 function usage
 {
-    echo "logging.sh up [project-id] [home-logs-destination] [browse-logs-destination] [locate-logs-destination]"
-    echo "logging.sh down [project-id] [home-logs-destination] [browse-logs-destination] [locate-logs-destination]"
+    echo "logging.sh up [project-id]"
+    echo "logging.sh down [project-id]"
+
 }
 
 function service_names
 {
     echo -n "* Getting microservices service names..."
-    HOME_SERVICE="$(kubectl get pods -l name=home-service -o template --template="${TEMPLATE}" | tr -d '[[:space:]]')"
-    BROWSE_SERVICE="$(kubectl get pods -l name=browse-service -o template --template="${TEMPLATE}" | tr -d '[[:space:]]')"
-    LOCATE_SERVICE="$(kubectl get pods -l name=locate-service -o template --template="${TEMPLATE}" | tr -d '[[:space:]]')"
+    SERVICE_NAMES=("home" "browse" "locate")
+    for i in 0 1 2; do
+        SERVICE_NAMES[$i]="$(kubectl get pods -l name=${SERVICE_NAMES[$i]}-service -o template --template="${TEMPLATE}" | tr -d '[[:space:]]')"
+    done
     echo "done"
 }
 
@@ -35,40 +32,31 @@ case "$1" in
     up )
         service_names
 
-        echo "* Creating Cloud Pub/Sub topic ${HOME_LOGS}..."
-        gcloud alpha pubsub topics create "${HOME_LOGS}" --quiet 
+        echo "* Creating Google Cloud Storage bucket gs://microservices-logs"
+        gsutil -q mb gs://microservices-logs
+        gsutil -q acl ch -g cloud-logs@google.com:O gs://microservices-logs
 
-        echo "* Creating Google Cloud Storage bucket ${BROWSE_LOGS}..."
-        gsutil -q mb gs://${BROWSE_LOGS}
-        gsutil -q acl ch -g cloud-logs@google.com:O gs://${BROWSE_LOGS}
-
-        echo "* Creating Google Cloud Storage bucket ${LOCATE_LOGS}..."
-        gsutil -q mb gs://${LOCATE_LOGS}
-        gsutil -q acl ch -g cloud-logs@google.com:O gs://${LOCATE_LOGS}
-
-        echo "* Creating Log Export Sinks..."
-        gcloud beta logging sinks create ${HOME_SERVICE} pubsub.googleapis.com/${PUBSUB_TOPIC} --log="kubernetes.${HOME_SERVICE}" --quiet
-        gcloud beta logging sinks create ${BROWSE_SERVICE} storage.googleapis.com/${BROWSE_LOGS} --log="kubernetes.${BROWSE_SERVICE}" --quiet
-        gcloud beta logging sinks create ${LOCATE_SERVICE} storage.googleapis.com/${LOCATE_LOGS} --log="kubernetes.${LOCATE_SERVICE}" --quiet
+        echo -n "* Creating Log Export Sinks..."
+        for s in ${SERVICE_NAMES[@]}; do
+            gcloud beta logging sinks create ${s} storage.googleapis.com/microservices-logs \
+              --log="kubernetes.${s}" --quiet >/dev/null || error_exit "Error creating Log Export Sinks"
+        done
+        echo "done"
         ;;
     down )
         service_names
 
-        echo "* Deleting Log Export Sinks..."
-        for s in $HOME_SERVICE $BROWSE_SERVICE $LOCATE_SERVICE; do
-            gcloud beta logging sinks delete ${s} --log="kubernetes.${s}" --quiet
+        echo -n "* Deleting Log Export Sinks..."
+        for s in ${SERVICE_NAMES[@]}; do
+            gcloud beta logging sinks delete ${s} --log="kubernetes.${s}" \
+              --quiet >/dev/null || error_exit "Error deleting Log Export Sinks"
         done
+        echo "done"
 
-        echo "* Deleting Google Cloud Storage bucket ${BROWSE_LOGS}..."
-        gsutil -q rm -rf "gs://${BROWSE_LOGS}/*"
-        gsutil -q rb gs://${BROWSE_LOGS}
+        echo "* Deleting Google Cloud Storage bucket gs://microservices-logs"
+        gsutil -q rm -rf "gs://microservices-logs/*"
+        gsutil -q rb gs://microservices-logs
 
-        echo "* Deleting Google Cloud Storage bucket ${LOCATE_LOGS}..."
-        gsutil -q rm -rf "gs://${LOCATE_LOGS}/*"
-        gsutil -q rb gs://${LOCATE_LOGS}
-
-        echo "* Deleting Cloud Pub/Sub topic ${HOME_LOGS}..."
-        gcloud alpha pubsub topics delete "${HOME_LOGS}" --quiet 
         ;;
     help )
         usage
