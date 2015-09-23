@@ -207,7 +207,7 @@ public class LogAnalyticsPipeline {
         // - Extract individual LogEntry objects from each PubSub CloudLogging message (structPayload.log)
         // - Change windowing from Global to 1 day fixed windows
         PCollection<LogEntry> homeLogsDaily = p
-          .apply(TextIO.Read.from(props.getProperty("homeLogSource")))
+          .apply(TextIO.Read.named("homeLogsRead").from(props.getProperty("homeLogSource")))
           .apply(ParDo.named("homeLogsToLogEntry").of(new EmitLogEntryFn(true, logRegexPattern)))
           .apply(Window.named("homeLogEntryToDaily").<LogEntry>into(FixedWindows.of(Duration.standardDays(1))));
 
@@ -216,7 +216,7 @@ public class LogAnalyticsPipeline {
         // - Extract individual LogEntry objects from CloudLogging message (structPayload.log)
         // - Change windowing from "all" to 1 day fixed windows
         PCollection<LogEntry> browseLogsDaily = p
-          .apply(TextIO.Read.from(props.getProperty("browseLogSource")))
+          .apply(TextIO.Read.named("browseLogsRead").from(props.getProperty("browseLogSource")))
           .apply(ParDo.named("browseLogsToLogEntry").of(new EmitLogEntryFn(true, logRegexPattern)))
           .apply(Window.named("browseLogEntryToDaily").<LogEntry>into(FixedWindows.of(Duration.standardDays(1))));
 
@@ -225,7 +225,7 @@ public class LogAnalyticsPipeline {
         // - Extract individual LogEntry objects from CloudLogging message (structPayload.log)
         // - Change windowing from "all" to 1 day fixed windows
         PCollection<LogEntry> locateLogsDaily = p
-          .apply(TextIO.Read.from(props.getProperty("locateLogSource")))
+          .apply(TextIO.Read.named("locateLogsRead").from(props.getProperty("locateLogSource")))
           .apply(ParDo.named("locateLogsToLogEntry").of(new EmitLogEntryFn(true, logRegexPattern)))
           .apply(Window.named("locateLogEntryToDaily").<LogEntry>into(FixedWindows.of(Duration.standardDays(1))));
 
