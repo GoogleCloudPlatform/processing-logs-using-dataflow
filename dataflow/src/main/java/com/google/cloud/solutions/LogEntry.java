@@ -1,14 +1,18 @@
 package com.google.cloud.solutions;
 
+import com.google.cloud.dataflow.sdk.coders.AvroCoder;
+import com.google.cloud.dataflow.sdk.coders.DefaultCoder;
+import org.apache.avro.reflect.Nullable;
 import org.joda.time.Instant;
 
+@DefaultCoder(AvroCoder.class)
 class LogEntry {
-    private Instant timestamp;
-    private int httpStatusCode;
-    private double responseTime;
-    private String source;
-    private String httpMethod;
-    private String destination;
+    @Nullable private Instant timestamp;
+    @Nullable private int httpStatusCode;
+    @Nullable private double responseTime;
+    @Nullable private String source;
+    @Nullable private String httpMethod;
+    @Nullable private String destination;
 
     public LogEntry(Instant timestamp, int httpStatusCode, double responseTime,
                     String source, String httpMethod, String destination) {
@@ -21,26 +25,26 @@ class LogEntry {
     }
 
     public Instant getTimestamp() {
-        return timestamp;
+        return this.timestamp;
     }
 
     public int getHttpStatusCode() {
-        return httpStatusCode;
+        return this.httpStatusCode;
     }
 
     public double getResponseTime() {
-        return responseTime;
+        return this.responseTime;
     }
 
     public String getSource() {
-        return source;
+        return this.source;
     }
 
     public String getHttpMethod() {
-        return httpMethod;
+        return this.httpMethod;
     }
 
     public String getDestination() {
-        return destination;
+        return this.destination;
     }
 }
