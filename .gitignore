@@ -5,4 +5,7 @@ locate-service
 .idea
 *.iml
 target
+.classpath
+.project
+.settings
 
