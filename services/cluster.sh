@@ -56,7 +56,7 @@ case "$1" in
         ;;
     down )
         echo -n "* Deleting Google Container Engine cluster ${CLUSTER_NAME} under project ${PROJECT_ID}..."
-        gcloud container clusters delete ${CLUSTER_NAME} >/dev/null || error_exit "Error deleting Google Container Engine cluster"
+        gcloud container clusters delete ${CLUSTER_NAME} --project ${PROJECT_ID} >/dev/null || error_exit "Error deleting Google Container Engine cluster"
         echo "done"
         ;;
     help )
