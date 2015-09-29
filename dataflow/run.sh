@@ -3,7 +3,9 @@
 mvn compile exec:java \
 -Dexec.mainClass=com.google.cloud.solutions.LogAnalyticsPipeline \
 -Dexec.args="\
---project=cloud-solutions-group \
---stagingLocation=gs://solutions-project-logs/staging \
---runner=BlockingDataflowPipelineRunner \
+--project=parikhs-dataflow-test \
+--stagingLocation=gs://k8slogs/staging \
+--runner=DirectPipelineRunner \
 --configFile=LogAnalyticsConfig.properties"
+
+# --runner=BlockingDataflowPipelineRunner \
