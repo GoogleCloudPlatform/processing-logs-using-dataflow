@@ -14,6 +14,8 @@ class LogMessage {
     @Nullable private String httpMethod;
     @Nullable private String destination;
 
+    public LogMessage() {}
+
     public LogMessage(Instant timestamp, int httpStatusCode, double responseTime,
                       String source, String httpMethod, String destination) {
         this.timestamp = timestamp;
