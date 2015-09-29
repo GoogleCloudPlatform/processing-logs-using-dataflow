@@ -1,8 +1,12 @@
 package com.google.cloud.solutions;
 
+import com.google.api.client.json.JsonParser;
+import com.google.api.client.json.jackson2.JacksonFactory;
+import com.google.api.client.util.DateTime;
 import com.google.api.services.bigquery.model.TableFieldSchema;
 import com.google.api.services.bigquery.model.TableRow;
 import com.google.api.services.bigquery.model.TableSchema;
+import com.google.api.services.logging.model.LogEntry;
 import com.google.cloud.dataflow.sdk.Pipeline;
 import com.google.cloud.dataflow.sdk.PipelineResult;
 import com.google.cloud.dataflow.sdk.io.BigQueryIO;
@@ -17,9 +21,6 @@ import com.google.cloud.dataflow.sdk.transforms.windowing.Window;
 import com.google.cloud.dataflow.sdk.values.KV;
 import com.google.cloud.dataflow.sdk.values.PCollection;
 import com.google.cloud.dataflow.sdk.values.PCollectionList;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import org.joda.time.Duration;
 import org.joda.time.Instant;
 import org.joda.time.format.DateTimeFormat;
@@ -75,80 +76,88 @@ public class LogAnalyticsPipeline {
         return p;
     }
 
-    private static class EmitLogEntryFn extends DoFn<String,LogEntry> {
-        private boolean withTimestamp;
+    private static class EmitLogMessageFn extends DoFn<String,LogMessage> {
         private String regexPattern;
 
-        public EmitLogEntryFn(boolean withTimestamp, String regexPattern) {
-            this.withTimestamp = withTimestamp;
+        public EmitLogMessageFn(String regexPattern) {
             this.regexPattern = regexPattern;
         }
 
         @Override
         public void processElement(ProcessContext c) {
-            if(withTimestamp) {
-                Instant timestamp = getTimestampFromEntry(c.element());
-                LogEntry logEntry = parseEntry(c.element());
-                c.outputWithTimestamp(logEntry, timestamp);
-            }
-            else {
-                LogEntry logEntry = parseEntry(c.element());
-                c.output(logEntry);
+            Instant timestamp = getTimestampFromEntry(c.element());
+            LogMessage logMessage = parseEntry(c.element());
+            if(logMessage != null) {
+                c.outputWithTimestamp(logMessage, timestamp);
             }
         }
 
         private Instant getTimestampFromEntry(String entry) {
-            JsonParser parser = new JsonParser();
-            JsonElement rootElement = parser.parse(entry);
+            String timestamp = "";
+            DateTimeFormatter fmt = ISODateTimeFormat.dateTimeNoMillis();
 
-            JsonObject metadata = rootElement
-              .getAsJsonObject()
-              .getAsJsonObject("metadata");
-            JsonObject timestamp = metadata.getAsJsonObject("timestamp");
+            try {
+                JsonParser parser = new JacksonFactory().createJsonParser(entry);
+                LogEntry logEntry = parser.parse(LogEntry.class);
+                timestamp = logEntry.getMetadata().getTimestamp();
+            }
+            catch (IOException e) {
+                LOG.error("IOException converting Cloud Logging JSON to LogEntry");
+            }
 
-            DateTimeFormatter fmt = ISODateTimeFormat.dateTime();
-
-            return fmt.parseDateTime(timestamp.getAsString()).toInstant();
+            return fmt.parseDateTime(timestamp).toInstant();
         }
 
-        private LogEntry parseEntry(String entry) {
-            JsonParser parser = new JsonParser();
-            JsonElement rootElement = parser.parse(entry);
-            JsonObject structPayload = rootElement
-              .getAsJsonObject()
-              .getAsJsonObject("structPayload");
-            JsonObject log = structPayload.getAsJsonObject("log");
+        private LogMessage parseEntry(String entry) {
+            String logString = "";
+
+            try {
+                JsonParser parser = new JacksonFactory().createJsonParser(entry);
+                LogEntry logEntry = parser.parse(LogEntry.class);
+                logString = logEntry.getStructPayload().get("log").toString();
+            }
+            catch (IOException e) {
+                LOG.error("IOException converting Cloud Logging JSON to LogEntry");
+            }
 
             Pattern p = Pattern.compile(this.regexPattern);
-            Matcher m = p.matcher(log.getAsString());
+            Matcher m = p.matcher(logString);
 
-            DateTimeFormatter fmt = DateTimeFormat.forPattern("yyy/MM/dd - HH:mm:ss");
-            Instant timestamp = fmt.parseDateTime(m.group("timestamp")).toInstant();
-            int httpStatusCode = Integer.valueOf(m.group("httpStatusCode"));
+            if(m.find()) {
+                DateTimeFormatter fmt = DateTimeFormat.forPattern("yyyy/MM/dd - HH:mm:ss");
+                Instant timestamp = fmt.parseDateTime(m.group("timestamp")).toInstant();
+                int httpStatusCode = Integer.valueOf(m.group("httpStatusCode"));
 
-            double responseTime = 0;
-            if(m.group("resolution") == "µs") {
-                responseTime = Double.valueOf(m.group("responseTime")) / 1000000;
+                double responseTime = 0;
+                if(m.group("resolution").equals("ns")) {
+                    responseTime = Double.valueOf(m.group("responseTime")) / 1e9;
+                }
+                else if(m.group("resolution").equals("µs")) {
+                    responseTime = Double.valueOf(m.group("responseTime")) / 1e6;
+                }
+                else if(m.group("resolution").equals("ms")) {
+                    responseTime = Double.valueOf(m.group("responseTime")) / 1e3;
+                }
+
+                String source = m.group("source");
+                String httpMethod = m.group("httpMethod");
+                String destination = m.group("destination");
+
+                return new LogMessage(timestamp, httpStatusCode, responseTime, source, httpMethod, destination);
             }
-            else if(m.group("resolution") == "ms") {
-                responseTime = Double.valueOf(m.group("responseTime")) / 1000;
+            else {
+                return null;
             }
-
-            String source = m.group("source");
-            String httpMethod = m.group("httpMethod");
-            String destination = m.group("destination");
-
-            return new LogEntry(timestamp, httpStatusCode, responseTime, source, httpMethod, destination);
         }
     }
 
-    private static class LogEntryTableRowFn extends DoFn<LogEntry, TableRow> {
+    private static class LogMessageTableRowFn extends DoFn<LogMessage, TableRow> {
         @Override
         public void processElement(ProcessContext c) {
-            LogEntry e = c.element();
+            LogMessage e = c.element();
 
             TableRow row = new TableRow()
-              .set("timestamp", e.getTimestamp().toDateTime())
+              .set("timestamp", new DateTime(e.getTimestamp().toDateTime().toDate()))
               .set("httpStatusCode", e.getHttpStatusCode())
               .set("responseTime", e.getResponseTime())
               .set("source", e.getSource())
@@ -166,7 +175,7 @@ public class LogAnalyticsPipeline {
 
             TableRow row = new TableRow()
               .set("destination", e.getKey())
-              .set("responseTime", e.getValue());
+              .set("aggResponseTime", e.getValue());
 
             c.output(row);
         }
@@ -189,8 +198,8 @@ public class LogAnalyticsPipeline {
         PipelineOptionsFactory.register(LogAnalyticsPipelineOptions.class);
         LogAnalyticsPipelineOptions options = PipelineOptionsFactory
           .fromArgs(args)
-          .withValidation()
-          .as(LogAnalyticsPipelineOptions.class);
+                .withValidation()
+                .as(LogAnalyticsPipelineOptions.class);
 
         // Set DEBUG log level for all workers
         options.setDefaultWorkerLogLevel(DataflowWorkerLoggingOptions.Level.DEBUG);
@@ -204,41 +213,41 @@ public class LogAnalyticsPipeline {
 
         // PCollection from
         // - Cloud Storage source
-        // - Extract individual LogEntry objects from each PubSub CloudLogging message (structPayload.log)
+        // - Extract individual LogMessage objects from each PubSub CloudLogging message (structPayload.log)
         // - Change windowing from Global to 1 day fixed windows
-        PCollection<LogEntry> homeLogsDaily = p
+        PCollection<LogMessage> homeLogsDaily = p
           .apply(TextIO.Read.named("homeLogsRead").from(props.getProperty("homeLogSource")))
-          .apply(ParDo.named("homeLogsToLogEntry").of(new EmitLogEntryFn(true, logRegexPattern)))
-          .apply(Window.named("homeLogEntryToDaily").<LogEntry>into(FixedWindows.of(Duration.standardDays(1))));
+          .apply(ParDo.named("homeLogsToLogEntry").of(new EmitLogMessageFn(logRegexPattern)))
+          .apply(Window.named("homeLogEntryToDaily").<LogMessage>into(FixedWindows.of(Duration.standardDays(1))));
 
         // PCollection from
         // - Cloud Storage source
-        // - Extract individual LogEntry objects from CloudLogging message (structPayload.log)
+        // - Extract individual LogMessage objects from CloudLogging message (structPayload.log)
         // - Change windowing from "all" to 1 day fixed windows
-        PCollection<LogEntry> browseLogsDaily = p
+        PCollection<LogMessage> browseLogsDaily = p
           .apply(TextIO.Read.named("browseLogsRead").from(props.getProperty("browseLogSource")))
-          .apply(ParDo.named("browseLogsToLogEntry").of(new EmitLogEntryFn(true, logRegexPattern)))
-          .apply(Window.named("browseLogEntryToDaily").<LogEntry>into(FixedWindows.of(Duration.standardDays(1))));
+          .apply(ParDo.named("browseLogsToLogEntry").of(new EmitLogMessageFn(logRegexPattern)))
+          .apply(Window.named("browseLogEntryToDaily").<LogMessage>into(FixedWindows.of(Duration.standardDays(1))));
 
         // PCollection from
         // - Cloud Storage source
-        // - Extract individual LogEntry objects from CloudLogging message (structPayload.log)
+        // - Extract individual LogMessage objects from CloudLogging message (structPayload.log)
         // - Change windowing from "all" to 1 day fixed windows
-        PCollection<LogEntry> locateLogsDaily = p
+        PCollection<LogMessage> locateLogsDaily = p
           .apply(TextIO.Read.named("locateLogsRead").from(props.getProperty("locateLogSource")))
-          .apply(ParDo.named("locateLogsToLogEntry").of(new EmitLogEntryFn(true, logRegexPattern)))
-          .apply(Window.named("locateLogEntryToDaily").<LogEntry>into(FixedWindows.of(Duration.standardDays(1))));
+          .apply(ParDo.named("locateLogsToLogEntry").of(new EmitLogMessageFn(logRegexPattern)))
+          .apply(Window.named("locateLogEntryToDaily").<LogMessage>into(FixedWindows.of(Duration.standardDays(1))));
 
         // Create a single PCollection by flattening three (windowed) PCollections
-        PCollection<LogEntry> logCollection = PCollectionList
+        PCollection<LogMessage> logCollection = PCollectionList
           .of(homeLogsDaily)
           .and(browseLogsDaily)
           .and(locateLogsDaily)
-          .apply(Flatten.<LogEntry>pCollections());
+          .apply(Flatten.<LogMessage>pCollections());
 
-        // Create new PCollection containing LogEntry->TableRow
+        // Create new PCollection containing LogMessage->TableRow
         PCollection<TableRow> logsAsTableRows = logCollection
-          .apply(ParDo.named("logEntryToTableRow").of(new LogEntryTableRowFn()));
+          .apply(ParDo.named("logMessageToTableRow").of(new LogMessageTableRowFn()));
 
         // Output TableRow PCollection into BigQuery
         // - Append all writes to existing rows
@@ -255,10 +264,10 @@ public class LogAnalyticsPipeline {
         // - Contains "destination,responseTime" key-value pairs
         // - Used for running simple aggregations
         PCollection<KV<String,Double>> destResponseTimeCollection = logCollection
-          .apply(ParDo.named("logEntryToDestRespTime").of(new DoFn<LogEntry, KV<String, Double>>() {
+          .apply(ParDo.named("logMessageToDestRespTime").of(new DoFn<LogMessage, KV<String, Double>>() {
               @Override
               public void processElement(ProcessContext processContext) throws Exception {
-                  LogEntry l = processContext.element();
+                  LogMessage l = processContext.element();
                   processContext.output(KV.of(l.getDestination(), l.getResponseTime()));
               }
           }));
