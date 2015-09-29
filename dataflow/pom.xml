@@ -13,9 +13,19 @@
             <version>LATEST</version>
         </dependency>
         <dependency>
-            <groupId>com.google.code.gson</groupId>
-            <artifactId>gson</artifactId>
-            <version>2.3.1</version>
+            <groupId>com.google.apis</groupId>
+            <artifactId>google-api-services-logging</artifactId>
+            <version>v1beta3-rev5-1.20.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.http-client</groupId>
+            <artifactId>google-http-client</artifactId>
+            <version>1.20.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.http-client</groupId>
+            <artifactId>google-http-client-jackson2</artifactId>
+            <version>1.20.0</version>
         </dependency>
         <dependency>
             <groupId>junit</groupId>
@@ -24,4 +34,8 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+    <properties>
+        <maven.compiler.source>1.5</maven.compiler.source>
+        <maven.compiler.target>1.5</maven.compiler.target>
+    </properties>
 </project>
