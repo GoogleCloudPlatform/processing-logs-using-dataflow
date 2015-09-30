@@ -11,9 +11,7 @@ import com.google.cloud.dataflow.sdk.Pipeline;
 import com.google.cloud.dataflow.sdk.PipelineResult;
 import com.google.cloud.dataflow.sdk.io.BigQueryIO;
 import com.google.cloud.dataflow.sdk.io.TextIO;
-import com.google.cloud.dataflow.sdk.options.DataflowPipelineOptions;
 import com.google.cloud.dataflow.sdk.options.DataflowWorkerLoggingOptions;
-import com.google.cloud.dataflow.sdk.options.Description;
 import com.google.cloud.dataflow.sdk.options.PipelineOptionsFactory;
 import com.google.cloud.dataflow.sdk.transforms.*;
 import com.google.cloud.dataflow.sdk.transforms.windowing.FixedWindows;
@@ -41,41 +39,7 @@ import java.util.regex.Pattern;
 public class LogAnalyticsPipeline {
 
     private static final Logger LOG = LoggerFactory.getLogger(LogAnalyticsPipeline.class);
-
-    @SuppressWarnings("unused")
-    public interface LogAnalyticsPipelineOptions extends DataflowPipelineOptions {
-        @Description("Log sources configuration file")
-        String getConfigFile();
-        void setConfigFile(String configFile);
-    }
-
-    private static Properties parseConfigFile(String configFileName) {
-        Properties p = new Properties();
-        InputStream configFile = null;
-
-        try {
-            LOG.debug("loading properties from " + configFileName);
-            configFile = new FileInputStream(configFileName);
-            p.load(configFile);
-            LOG.debug("loaded " + p.size() + " properties");
-        }
-        catch(IOException e) {
-            e.printStackTrace();
-        }
-        finally {
-            if(configFile != null) {
-                try {
-                    configFile.close();
-                }
-                catch(IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-
-        return p;
-    }
-
+    
     private static class EmitLogMessageFn extends DoFn<String,LogMessage> {
         private String regexPattern;
 
@@ -181,6 +145,35 @@ public class LogAnalyticsPipeline {
         }
     }
 
+    private static Properties parsePipelineConfigFile(String pipelineConfigFile) {
+        Properties props = new Properties();
+        InputStream configFile = null;
+
+        try {
+            LOG.debug("loading properties from " + pipelineConfigFile);
+            configFile = new FileInputStream(pipelineConfigFile);
+            props.load(configFile);
+            LOG.debug("loaded " + props.size() + " properties");
+        }
+        catch(IOException e) {
+            e.printStackTrace();
+            LOG.error("unable to parse pipelineConfigFile: " + pipelineConfigFile);
+            System.exit(-1);
+        }
+        finally {
+            if(configFile != null) {
+                try {
+                    configFile.close();
+                }
+                catch(IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        return props;
+    }
+
     private static TableSchema createTableSchema(String schema) {
         String[] fieldTypePairs = schema.split(",");
         List<TableFieldSchema> fields = new ArrayList<TableFieldSchema>();
@@ -205,7 +198,7 @@ public class LogAnalyticsPipeline {
         options.setDefaultWorkerLogLevel(DataflowWorkerLoggingOptions.Level.DEBUG);
 
         // Get .properties file containing pipeline options
-        Properties props = parseConfigFile(options.getConfigFile());
+        Properties props = parsePipelineConfigFile(options.getPipelineConfigFile());
         String logRegexPattern = props.getProperty("logRegexPattern");
 
         // Create pipeline
@@ -216,7 +209,7 @@ public class LogAnalyticsPipeline {
         // - Extract individual LogMessage objects from each PubSub CloudLogging message (structPayload.log)
         // - Change windowing from Global to 1 day fixed windows
         PCollection<LogMessage> homeLogsDaily = p
-          .apply(TextIO.Read.named("homeLogsRead").from(props.getProperty("homeLogSource")))
+          .apply(TextIO.Read.named("homeLogsRead").from(options.getHomeLogSource()))
           .apply(ParDo.named("homeLogsToLogEntry").of(new EmitLogMessageFn(logRegexPattern)))
           .apply(Window.named("homeLogEntryToDaily").<LogMessage>into(FixedWindows.of(Duration.standardDays(1))));
 
@@ -225,7 +218,7 @@ public class LogAnalyticsPipeline {
         // - Extract individual LogMessage objects from CloudLogging message (structPayload.log)
         // - Change windowing from "all" to 1 day fixed windows
         PCollection<LogMessage> browseLogsDaily = p
-          .apply(TextIO.Read.named("browseLogsRead").from(props.getProperty("browseLogSource")))
+          .apply(TextIO.Read.named("browseLogsRead").from(options.getBrowseLogSource()))
           .apply(ParDo.named("browseLogsToLogEntry").of(new EmitLogMessageFn(logRegexPattern)))
           .apply(Window.named("browseLogEntryToDaily").<LogMessage>into(FixedWindows.of(Duration.standardDays(1))));
 
@@ -234,7 +227,7 @@ public class LogAnalyticsPipeline {
         // - Extract individual LogMessage objects from CloudLogging message (structPayload.log)
         // - Change windowing from "all" to 1 day fixed windows
         PCollection<LogMessage> locateLogsDaily = p
-          .apply(TextIO.Read.named("locateLogsRead").from(props.getProperty("locateLogSource")))
+          .apply(TextIO.Read.named("locateLogsRead").from(options.getLocateLogSource()))
           .apply(ParDo.named("locateLogsToLogEntry").of(new EmitLogMessageFn(logRegexPattern)))
           .apply(Window.named("locateLogEntryToDaily").<LogMessage>into(FixedWindows.of(Duration.standardDays(1))));
 
