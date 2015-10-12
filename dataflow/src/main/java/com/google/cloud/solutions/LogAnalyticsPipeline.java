@@ -10,8 +10,8 @@ import com.google.api.services.logging.model.LogEntry;
 import com.google.cloud.dataflow.sdk.Pipeline;
 import com.google.cloud.dataflow.sdk.PipelineResult;
 import com.google.cloud.dataflow.sdk.io.BigQueryIO;
+import com.google.cloud.dataflow.sdk.io.PubsubIO;
 import com.google.cloud.dataflow.sdk.io.TextIO;
-import com.google.cloud.dataflow.sdk.options.DataflowWorkerLoggingOptions;
 import com.google.cloud.dataflow.sdk.options.PipelineOptionsFactory;
 import com.google.cloud.dataflow.sdk.transforms.*;
 import com.google.cloud.dataflow.sdk.transforms.windowing.FixedWindows;
@@ -27,12 +27,9 @@ import org.joda.time.format.ISODateTimeFormat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -41,9 +38,11 @@ public class LogAnalyticsPipeline {
     private static final Logger LOG = LoggerFactory.getLogger(LogAnalyticsPipeline.class);
     
     private static class EmitLogMessageFn extends DoFn<String,LogMessage> {
+        private boolean outputWithTimestamp;
         private String regexPattern;
 
-        public EmitLogMessageFn(String regexPattern) {
+        public EmitLogMessageFn(boolean outputWithTimestamp, String regexPattern) {
+            this.outputWithTimestamp = outputWithTimestamp;
             this.regexPattern = regexPattern;
         }
 
@@ -52,7 +51,12 @@ public class LogAnalyticsPipeline {
             Instant timestamp = getTimestampFromEntry(c.element());
             LogMessage logMessage = parseEntry(c.element());
             if(logMessage != null) {
-                c.outputWithTimestamp(logMessage, timestamp);
+                if(this.outputWithTimestamp) {
+                    c.outputWithTimestamp(logMessage, timestamp);
+                }
+                else {
+                    c.output(logMessage);
+                }
             }
         }
 
@@ -132,58 +136,52 @@ public class LogAnalyticsPipeline {
         }
     }
 
-    private static class AggregateTableRowFn extends DoFn<KV<String,Double>, TableRow> {
-        @Override
-        public void processElement(ProcessContext c) {
-            KV<String,Double> e = c.element();
+    private static class TableRowOutputTransform extends PTransform<PCollection<KV<String,Double>>,PCollection<TableRow>> {
+        private String tableSchema;
+        private String tableName;
 
-            TableRow row = new TableRow()
-              .set("destination", e.getKey())
-              .set("aggResponseTime", e.getValue());
-
-            c.output(row);
+        public TableRowOutputTransform(String tableSchema, String tableName) {
+            this.tableSchema = tableSchema;
+            this.tableName = tableName;
         }
-    }
 
-    private static Properties parsePipelineConfigFile(String pipelineConfigFile) {
-        Properties props = new Properties();
-        InputStream configFile = null;
+        private static TableSchema createTableSchema(String schema) {
+            String[] fieldTypePairs = schema.split(",");
+            List<TableFieldSchema> fields = new ArrayList<TableFieldSchema>();
 
-        try {
-            LOG.debug("loading properties from " + pipelineConfigFile);
-            configFile = new FileInputStream(pipelineConfigFile);
-            props.load(configFile);
-            LOG.debug("loaded " + props.size() + " properties");
-        }
-        catch(IOException e) {
-            e.printStackTrace();
-            LOG.error("unable to parse pipelineConfigFile: " + pipelineConfigFile);
-            System.exit(-1);
-        }
-        finally {
-            if(configFile != null) {
-                try {
-                    configFile.close();
-                }
-                catch(IOException e) {
-                    e.printStackTrace();
-                }
+            for(String entry : fieldTypePairs) {
+                String[] fieldAndType = entry.split(":");
+                fields.add(new TableFieldSchema().setName(fieldAndType[0]).setType(fieldAndType[1]));
             }
+
+            return new TableSchema().setFields(fields);
         }
 
-        return props;
-    }
+        @Override
+        public PCollection<TableRow> apply(PCollection<KV<String,Double>> input) {
+            PCollection<TableRow> output = input.
+              apply(ParDo.named("aggregateToTableRow").of(new DoFn<KV<String, Double>, TableRow>() {
+                  @Override
+                  public void processElement(ProcessContext c) {
+                      KV<String, Double> e = c.element();
 
-    private static TableSchema createTableSchema(String schema) {
-        String[] fieldTypePairs = schema.split(",");
-        List<TableFieldSchema> fields = new ArrayList<TableFieldSchema>();
+                      TableRow row = new TableRow()
+                        .set("destination", e.getKey())
+                        .set("aggResponseTime", e.getValue());
 
-        for(String entry : fieldTypePairs) {
-            String[] fieldAndType = entry.split(":");
-            fields.add(new TableFieldSchema().setName(fieldAndType[0]).setType(fieldAndType[1]));
+                      c.output(row);
+                  }
+              }));
+
+            output.apply(BigQueryIO.Write
+              .named("tableRowToBigQuery")
+              .to(this.tableName)
+              .withSchema(createTableSchema(this.tableSchema))
+              .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_APPEND)
+              .withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_IF_NEEDED));
+
+            return output;
         }
-
-        return new TableSchema().setFields(fields);
     }
 
     public static void main(String[] args) {
@@ -194,49 +192,35 @@ public class LogAnalyticsPipeline {
                 .withValidation()
                 .as(LogAnalyticsPipelineOptions.class);
 
-        // Set DEBUG log level for all workers
-        options.setDefaultWorkerLogLevel(DataflowWorkerLoggingOptions.Level.DEBUG);
-
-        // Get .properties file containing pipeline options
-        Properties props = parsePipelineConfigFile(options.getPipelineConfigFile());
-        String logRegexPattern = props.getProperty("logRegexPattern");
-
-        // Create pipeline
         Pipeline p = Pipeline.create(options);
 
-        // PCollection from
-        // - Cloud Storage source
-        // - Extract individual LogMessage objects from each PubSub CloudLogging message (structPayload.log)
-        // - Change windowing from Global to 1 day fixed windows
-        PCollection<LogMessage> homeLogsDaily = p
-          .apply(TextIO.Read.named("homeLogsRead").from(options.getHomeLogSource()))
-          .apply(ParDo.named("homeLogsToLogEntry").of(new EmitLogMessageFn(logRegexPattern)))
-          .apply(Window.named("homeLogEntryToDaily").<LogMessage>into(FixedWindows.of(Duration.standardDays(1))));
+        PCollection<String> homeLogs;
+        PCollection<String> browseLogs;
+        PCollection<String> locateLogs;
+        boolean outputWithTimestamp;
+        
+        if(options.isStreaming()) {
+            outputWithTimestamp = false;
+            homeLogs = p.apply(PubsubIO.Read.named("homeLogsPubSubRead").subscription(options.getHomeLogSource()));
+            browseLogs = p.apply(PubsubIO.Read.named("browseLogsPubSubRead").subscription(options.getBrowseLogSource()));
+            locateLogs = p.apply(PubsubIO.Read.named("locateLogsPubSubRead").subscription(options.getLocateLogSource()));
+        }
+        else {
+            outputWithTimestamp = true;
+            homeLogs = p.apply(TextIO.Read.named("homeLogsTextRead").from(options.getHomeLogSource()));
+            browseLogs = p.apply(TextIO.Read.named("browseLogsTextRead").from(options.getBrowseLogSource()));
+            locateLogs = p.apply(TextIO.Read.named("locateLogsTextRead").from(options.getLocateLogSource()));
+        }
 
-        // PCollection from
-        // - Cloud Storage source
-        // - Extract individual LogMessage objects from CloudLogging message (structPayload.log)
-        // - Change windowing from "all" to 1 day fixed windows
-        PCollection<LogMessage> browseLogsDaily = p
-          .apply(TextIO.Read.named("browseLogsRead").from(options.getBrowseLogSource()))
-          .apply(ParDo.named("browseLogsToLogEntry").of(new EmitLogMessageFn(logRegexPattern)))
-          .apply(Window.named("browseLogEntryToDaily").<LogMessage>into(FixedWindows.of(Duration.standardDays(1))));
+        PCollection<String> allLogs = PCollectionList
+          .of(homeLogs)
+          .and(browseLogs)
+          .and(locateLogs)
+          .apply(Flatten.<String>pCollections());
 
-        // PCollection from
-        // - Cloud Storage source
-        // - Extract individual LogMessage objects from CloudLogging message (structPayload.log)
-        // - Change windowing from "all" to 1 day fixed windows
-        PCollection<LogMessage> locateLogsDaily = p
-          .apply(TextIO.Read.named("locateLogsRead").from(options.getLocateLogSource()))
-          .apply(ParDo.named("locateLogsToLogEntry").of(new EmitLogMessageFn(logRegexPattern)))
-          .apply(Window.named("locateLogEntryToDaily").<LogMessage>into(FixedWindows.of(Duration.standardDays(1))));
-
-        // Create a single PCollection by flattening three (windowed) PCollections
-        PCollection<LogMessage> logCollection = PCollectionList
-          .of(homeLogsDaily)
-          .and(browseLogsDaily)
-          .and(locateLogsDaily)
-          .apply(Flatten.<LogMessage>pCollections());
+        PCollection<LogMessage> logCollection = allLogs
+          .apply(ParDo.named("allLogsToLogMessage").of(new EmitLogMessageFn(outputWithTimestamp, options.getLogRegexPattern())))
+          .apply(Window.named("allLogMessageToDaily").<LogMessage>into(FixedWindows.of(Duration.standardDays(1))));
 
         // Create new PCollection containing LogMessage->TableRow
         PCollection<TableRow> logsAsTableRows = logCollection
@@ -245,10 +229,10 @@ public class LogAnalyticsPipeline {
         // Output TableRow PCollection into BigQuery
         // - Append all writes to existing rows
         // - Create the table if it does not exist already
-        TableSchema allLogsTableSchema = createTableSchema(props.getProperty("allLogsTableSchema"));
+        TableSchema allLogsTableSchema = TableRowOutputTransform.createTableSchema(options.getAllLogsTableSchema());
         logsAsTableRows.apply(BigQueryIO.Write
           .named("allLogsToBigQuery")
-          .to(props.getProperty("allLogsTableName"))
+          .to(options.getAllLogsTableName())
           .withSchema(allLogsTableSchema)
           .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_APPEND)
           .withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_IF_NEEDED));
@@ -265,37 +249,13 @@ public class LogAnalyticsPipeline {
               }
           }));
 
-        // Create new PCollection
-        // - First, find the max responseTime for each destination
-        // - Convert the result into PCollection of TableRow
         PCollection<TableRow> destMaxRespTimeRows = destResponseTimeCollection
           .apply(Combine.<String,Double,Double>perKey(new Max.MaxDoubleFn()))
-          .apply(ParDo.named("maxRespTimeToTableRow").of(new AggregateTableRowFn()));
+          .apply(new TableRowOutputTransform(options.getMaxRespTimeTableSchema(), options.getMaxRespTimeTableName()));
 
-        // Output destination->maxResponseTime PCollection to BigQuery
-        TableSchema maxRespTimeTableSchema = createTableSchema(props.getProperty("maxRespTimeTableSchema"));
-        destMaxRespTimeRows.apply(BigQueryIO.Write
-          .named("maxRespTimeToBigQuery")
-          .to(props.getProperty("maxRespTimeTableName"))
-          .withSchema(maxRespTimeTableSchema)
-          .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_APPEND)
-          .withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_IF_NEEDED));
-
-        // Create new PCollection
-        // - First, compute the mean responseTime for each destination
-        // - Convert the result into PCollection of TableRow
         PCollection<TableRow> destMeanRespTimeRows = destResponseTimeCollection
           .apply(Mean.<String,Double>perKey())
-          .apply(ParDo.named("meanRespTimeToTableRow").of(new AggregateTableRowFn()));
-
-        // Output destination->meanResponseTime PCollection to BigQuery
-        TableSchema meanRespTimeTableSchema = createTableSchema(props.getProperty("meanRespTimeTableSchema"));
-        destMeanRespTimeRows.apply(BigQueryIO.Write
-          .named("meanRespTimeToBigQuery")
-          .to(props.getProperty("meanRespTimeTableName"))
-          .withSchema(meanRespTimeTableSchema)
-          .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_APPEND)
-          .withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_IF_NEEDED));
+          .apply(new TableRowOutputTransform(options.getMeanRespTimeTableSchema(), options.getMeanRespTimeTableName()));
 
         PipelineResult r = p.run();
 
