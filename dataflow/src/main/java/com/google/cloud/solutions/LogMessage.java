@@ -6,7 +6,7 @@ import org.apache.avro.reflect.Nullable;
 import org.joda.time.Instant;
 
 @DefaultCoder(AvroCoder.class)
-class LogEntry {
+class LogMessage {
     @Nullable private Instant timestamp;
     @Nullable private int httpStatusCode;
     @Nullable private double responseTime;
@@ -14,8 +14,10 @@ class LogEntry {
     @Nullable private String httpMethod;
     @Nullable private String destination;
 
-    public LogEntry(Instant timestamp, int httpStatusCode, double responseTime,
-                    String source, String httpMethod, String destination) {
+    public LogMessage() {}
+
+    public LogMessage(Instant timestamp, int httpStatusCode, double responseTime,
+                      String source, String httpMethod, String destination) {
         this.timestamp = timestamp;
         this.httpStatusCode = httpStatusCode;
         this.responseTime = responseTime;
