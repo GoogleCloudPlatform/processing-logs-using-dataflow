@@ -36,7 +36,12 @@ import java.util.regex.Pattern;
 public class LogAnalyticsPipeline {
 
     private static final Logger LOG = LoggerFactory.getLogger(LogAnalyticsPipeline.class);
-    
+
+    /**
+     * EmitLogMessageFn is a custom DoFn which transforms String objects to LogMessage objects
+     * - The input String is a Cloud Logging LogEntry JSON object
+     * - The "structPayload.log" field contains the log message to be parsed
+     */
     private static class EmitLogMessageFn extends DoFn<String,LogMessage> {
         private boolean outputWithTimestamp;
         private String regexPattern;
@@ -119,6 +124,10 @@ public class LogAnalyticsPipeline {
         }
     }
 
+    /**
+     * LogMessageTableRowFn is a custom DoFn
+     * - Transforms LogMessage objects to BigQuery TableRow objects
+     */
     private static class LogMessageTableRowFn extends DoFn<LogMessage, TableRow> {
         @Override
         public void processElement(ProcessContext c) {
@@ -136,6 +145,12 @@ public class LogAnalyticsPipeline {
         }
     }
 
+    /**
+     * TableRowOutputTransform is a custom PTransform that transforms
+     * - An input PCollection<KV<String,Double>> to an output PCollection<TableRow>
+     * - Creates a BigQuery TableSchema from an input String
+     * - Writes the output PCollection<TableRow> to BigQuery
+     */
     private static class TableRowOutputTransform extends PTransform<PCollection<KV<String,Double>>,PCollection<TableRow>> {
         private String tableSchema;
         private String tableName;
@@ -145,7 +160,7 @@ public class LogAnalyticsPipeline {
             this.tableName = tableName;
         }
 
-        private static TableSchema createTableSchema(String schema) {
+        public static TableSchema createTableSchema(String schema) {
             String[] fieldTypePairs = schema.split(",");
             List<TableFieldSchema> fields = new ArrayList<TableFieldSchema>();
 
@@ -185,12 +200,11 @@ public class LogAnalyticsPipeline {
     }
 
     public static void main(String[] args) {
-        // Setup LogAnalyticsPipelineOptions
         PipelineOptionsFactory.register(LogAnalyticsPipelineOptions.class);
         LogAnalyticsPipelineOptions options = PipelineOptionsFactory
           .fromArgs(args)
-                .withValidation()
-                .as(LogAnalyticsPipelineOptions.class);
+          .withValidation()
+          .as(LogAnalyticsPipelineOptions.class);
 
         Pipeline p = Pipeline.create(options);
 
@@ -198,13 +212,19 @@ public class LogAnalyticsPipeline {
         PCollection<String> browseLogs;
         PCollection<String> locateLogs;
         boolean outputWithTimestamp;
-        
+
+        /**
+         * If the pipeline is started in "streaming" mode, treat the input sources as Pub/Sub subscriptions
+         */
         if(options.isStreaming()) {
             outputWithTimestamp = false;
             homeLogs = p.apply(PubsubIO.Read.named("homeLogsPubSubRead").subscription(options.getHomeLogSource()));
             browseLogs = p.apply(PubsubIO.Read.named("browseLogsPubSubRead").subscription(options.getBrowseLogSource()));
             locateLogs = p.apply(PubsubIO.Read.named("locateLogsPubSubRead").subscription(options.getLocateLogSource()));
         }
+        /**
+         * If the pipeline is not started in "streaming" mode, treat the input sources as Cloud Storage paths
+         */
         else {
             outputWithTimestamp = true;
             homeLogs = p.apply(TextIO.Read.named("homeLogsTextRead").from(options.getHomeLogSource()));
@@ -212,23 +232,31 @@ public class LogAnalyticsPipeline {
             locateLogs = p.apply(TextIO.Read.named("locateLogsTextRead").from(options.getLocateLogSource()));
         }
 
+        /**
+         * Flatten all input PCollections into a single PCollection
+         */
         PCollection<String> allLogs = PCollectionList
           .of(homeLogs)
           .and(browseLogs)
           .and(locateLogs)
           .apply(Flatten.<String>pCollections());
 
+        /**
+         * Transform "allLogs" PCollection<String> to PCollection<LogMessage> and apply custom windowing scheme
+         */
         PCollection<LogMessage> logCollection = allLogs
           .apply(ParDo.named("allLogsToLogMessage").of(new EmitLogMessageFn(outputWithTimestamp, options.getLogRegexPattern())))
           .apply(Window.named("allLogMessageToDaily").<LogMessage>into(FixedWindows.of(Duration.standardDays(1))));
 
-        // Create new PCollection containing LogMessage->TableRow
+        /**
+         * Transform "allLogs" PCollection<LogMessage> to PCollection<TableRow>
+         */
         PCollection<TableRow> logsAsTableRows = logCollection
           .apply(ParDo.named("logMessageToTableRow").of(new LogMessageTableRowFn()));
 
-        // Output TableRow PCollection into BigQuery
-        // - Append all writes to existing rows
-        // - Create the table if it does not exist already
+        /**
+         * Output "allLogs" PCollection<TableRow> to BigQuery
+         */
         TableSchema allLogsTableSchema = TableRowOutputTransform.createTableSchema(options.getAllLogsTableSchema());
         logsAsTableRows.apply(BigQueryIO.Write
           .named("allLogsToBigQuery")
@@ -237,9 +265,11 @@ public class LogAnalyticsPipeline {
           .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_APPEND)
           .withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_IF_NEEDED));
 
-        // Create new PCollection
-        // - Contains "destination,responseTime" key-value pairs
-        // - Used for running simple aggregations
+        /**
+         * Create new PCollection<KV<String,Double>>
+         * - Contains "destination->responseTime" key-value pairs
+         * - Used for computing responseTime aggregations
+         */
         PCollection<KV<String,Double>> destResponseTimeCollection = logCollection
           .apply(ParDo.named("logMessageToDestRespTime").of(new DoFn<LogMessage, KV<String, Double>>() {
               @Override
@@ -249,6 +279,12 @@ public class LogAnalyticsPipeline {
               }
           }));
 
+        /**
+         * Transform PCollection<KV<String,Double>> to PCollection<TableRow>
+         * - First aggregate "destination->responseTime" key-value pairs into
+         *   - destination->maxResponseTime and destination->meanResponseTime
+         * - Use custom PTransform to output PCollection to BigQuery
+         */
         PCollection<TableRow> destMaxRespTimeRows = destResponseTimeCollection
           .apply(Combine.<String,Double,Double>perKey(new Max.MaxDoubleFn()))
           .apply(new TableRowOutputTransform(options.getMaxRespTimeTableSchema(), options.getMaxRespTimeTableName()));
