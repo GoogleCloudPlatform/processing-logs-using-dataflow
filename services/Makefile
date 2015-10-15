@@ -1,7 +1,7 @@
 .PHONY: build image tag push
 
 services = home browse locate
-project = cloud-solutions-group
+project = cloud-solutions-images
 
 build:
 	$(foreach s, $(services), \

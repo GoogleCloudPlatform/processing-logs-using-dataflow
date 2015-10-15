@@ -33,7 +33,7 @@ spec:
     spec:
       containers:
         - name: sample-locate-service
-          image: gcr.io/cloud-solutions-group/sample-locate-service:latest
+          image: gcr.io/cloud-solutions-images/sample-locate-service:latest
           ports:
             - name: locate-http
               containerPort: 8200
