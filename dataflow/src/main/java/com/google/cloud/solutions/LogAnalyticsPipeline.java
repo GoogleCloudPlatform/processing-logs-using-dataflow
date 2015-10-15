@@ -53,11 +53,11 @@ public class LogAnalyticsPipeline {
 
         @Override
         public void processElement(ProcessContext c) {
-            Instant timestamp = getTimestampFromEntry(c.element());
             LogMessage logMessage = parseEntry(c.element());
             if(logMessage != null) {
                 if(this.outputWithTimestamp) {
-                    c.outputWithTimestamp(logMessage, timestamp);
+                    c.outputWithTimestamp(logMessage,
+                      getTimestampFromEntry(c.element()));
                 }
                 else {
                     c.output(logMessage);
@@ -90,7 +90,10 @@ public class LogAnalyticsPipeline {
                 logString = logEntry.getStructPayload().get("log").toString();
             }
             catch (IOException e) {
-                LOG.error("IOException converting Cloud Logging JSON to LogEntry");
+                LOG.error("IOException parsing entry: " + e.getMessage());
+            }
+            catch(NullPointerException e) {
+                LOG.error("NullPointerException parsing entry: " + e.getMessage());
             }
 
             Pattern p = Pattern.compile(this.regexPattern);
