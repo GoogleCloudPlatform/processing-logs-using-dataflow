@@ -26,36 +26,36 @@ fi
 
 case "$2" in
     up )
-        echo -n "\n* Creating Google Container Engine cluster ${CLUSTER_NAME} under project ${PROJECT_ID}..."
+        echo -n "* Creating Google Container Engine cluster ${CLUSTER_NAME} under project ${PROJECT_ID}..."
         gcloud container clusters create ${CLUSTER_NAME} \
           --scopes monitoring,logging-write \
           --project ${PROJECT_ID} \
           --machine-type ${MACHINE_TYPE} \
           --zone ${ZONE} \
           --num-nodes ${NUM_NODES} \
-          --quiet >/dev/null || error_exit "Error creating Google Container Engine cluster"
+          --quiet 2>&1 >/dev/null || error_exit "Error creating Google Container Engine cluster"
         echo "done"
 
-        echo "\n* Deploying microservices Replication Controllers..."
+        echo "* Deploying microservices Replication Controllers..."
         for f in `ls kubernetes/*-controller.yaml`; do
             kubectl create -f $f
         done
 
-        echo "\n* Deploying microservices Services..."
+        echo "* Deploying microservices Services..."
         for f in `ls kubernetes/*-service.yaml`; do
             kubectl create -f $f
         done
 
-        echo "\n* Waiting 2 minutes for Controllers/Services to be deployed..."
+        echo "* Waiting 2 minutes for Controllers/Services to be deployed..."
         sleep 120
 
-        echo "\n* Getting Replication Controllers:"
+        echo "* Getting Replication Controllers:"
         kubectl get rc
 
-        echo "\n* Getting Pods:"
+        echo "* Getting Pods:"
         kubectl get pods
 
-        echo "\n* Getting Services:"
+        echo "* Getting Services:"
         kubectl get services        
         ;;
     down )

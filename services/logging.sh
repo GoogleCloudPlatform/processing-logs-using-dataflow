@@ -57,10 +57,11 @@ case "$1" in
                 echo -n "* Creating Log Export sinks..."
                 for s in ${SERVICE_NAMES[@]}; do
                     gcloud beta logging sinks create ${s} \
-                    pubsub.googleapis.com/projects/$PROJECT_ID/topics/{s}
+                    pubsub.googleapis.com/projects/${PROJECT_ID}/topics/${s} \
                     --log="kubernetes.${s}" \
-                    --project=${PROJECT_ID}
+                    --project=${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error creating Log Export sinks"
+                done
                 echo "done"
                 ;;
             down )
@@ -68,7 +69,7 @@ case "$1" in
                 for s in ${SERVICE_NAMES[@]}; do
                     gcloud beta logging sinks delete ${s} \
                     --log="kubernetes.${s}" \
-                    --project=${PROJECT_ID}
+                    --project=${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error deleting Log Export sinks"
                 done                    
                 echo "done"
@@ -76,7 +77,7 @@ case "$1" in
                 echo -n "* Deleting Pub/Sub subscriptions..."
                 for s in ${SERVICE_NAMES[@]}; do
                     gcloud alpha pubsub subscriptions delete ${s} \
-                    --project=${PROJECT_ID}
+                    --project=${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error deleting Pub/Sub subscriptions"
                 done
                 echo "done"
@@ -84,8 +85,9 @@ case "$1" in
                 echo -n "* Deleting Pub/Sub topics..."
                 for s in ${SERVICE_NAMES[@]}; do
                     gcloud alpha pubsub topics delete ${s} \
-                    --project=${PROJECT_ID}
+                    --project=${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error deleting Pub/Sub topics"
+                done
                 echo "done"                
                 ;;
         esac
@@ -103,7 +105,7 @@ case "$1" in
                     gcloud beta logging sinks create ${s} \
                     storage.googleapis.com/microservices-logs \
                     --log="kubernetes.${s}" \
-                    --project=${PROJECT_ID}
+                    --project=${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error creating Log Export sinks"
                 done
                 echo "done"
@@ -113,7 +115,7 @@ case "$1" in
                 for s in ${SERVICE_NAMES[@]}; do
                     gcloud beta logging sinks delete ${s} \
                     --log="kubernetes.${s}" \
-                    --project=${PROJECT_ID}
+                    --project=${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error deleting Log Export Sinks"
                 done
                 echo "done"

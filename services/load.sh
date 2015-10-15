@@ -16,7 +16,7 @@ if [[ -z $@ ]]; then
     exit 0
 fi
 
-echo -n "\n* Getting IP/Port information for each microservice..."
+echo -n "* Getting IP/Port information for each microservice..."
 HOME_HOST="$(kubectl get services -l name=home-service -o template --template="${TEMPLATE}" | tr -d '[[:space:]]')"
 BROWSE_HOST="$(kubectl get services -l name=browse-service -o template --template="${TEMPLATE}" | tr -d '[[:space:]]')"
 LOCATE_HOST="$(kubectl get services -l name=locate-service -o template --template="${TEMPLATE}" | tr -d '[[:space:]]')"
