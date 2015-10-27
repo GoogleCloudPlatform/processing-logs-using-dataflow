@@ -3,6 +3,7 @@
 set -e
 
 PROJECT_ID=${3}
+GCS_BUCKET=${4}
 TEMPLATE="{{(index .items 0).metadata.name}}_{{(index .items 0).metadata.namespace}}_{{(index ((index .items 0).spec.containers) 0).name}}"
 
 function error_exit
@@ -13,7 +14,7 @@ function error_exit
 
 function usage
 {
-    echo "logging.sh [streaming|batch] [up|down] [project-id]"
+    echo "logging.sh [streaming|batch] [up|down] [project-id] [bucket-name]"
 }
 
 function get_service_names
@@ -95,15 +96,15 @@ case "$1" in
     batch )
         case "$2" in
             up )
-                echo -n "* Creating Google Cloud Storage bucket gs://microservices-logs..."
-                gsutil -q mb gs://microservices-logs
-                gsutil -q acl ch -g cloud-logs@google.com:O gs://microservices-logs
+                echo -n "* Creating Google Cloud Storage bucket gs://${GCS_BUCKET}..."
+                gsutil -q mb gs://${GCS_BUCKET}
+                gsutil -q acl ch -g cloud-logs@google.com:O gs://${GCS_BUCKET}
                 echo "done"
 
                 echo -n "* Creating Log Export sinks..."
                 for s in ${SERVICE_NAMES[@]}; do
                     gcloud beta logging sinks create ${s} \
-                    storage.googleapis.com/microservices-logs \
+                    storage.googleapis.com/${GCS_BUCKET} \
                     --log="kubernetes.${s}" \
                     --project=${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error creating Log Export sinks"
@@ -120,9 +121,9 @@ case "$1" in
                 done
                 echo "done"
 
-                echo -n "* Deleting Google Cloud Storage bucket gs://microservices-logs..."
-                gsutil -q rm -rf "gs://microservices-logs/*"
-                gsutil -q rb gs://microservices-logs
+                echo -n "* Deleting Google Cloud Storage bucket gs://${GCS_BUCKET}..."
+                gsutil -q rm -rf "gs://${GCS_BUCKET}/*"
+                gsutil -q rb gs://${GCS_BUCKET}
                 echo "done"
                 ;;
         esac
