@@ -73,8 +73,9 @@ For information on examining logs or log structure in Cloud Storage, refer to th
 
 ## Dataflow Pipeline
 
-The following diagram illustrates the structure and flow of the included Dataflow pipeline:
-asdfasdfasdfasdf
+The following diagram illustrates the structure and flow of the example Dataflow pipeline:
+
+![Dataflow pipeline structure](images/dataflow-log-analytics-pipeline.png)
 
 ### Create BigQuery Dataset
 
@@ -113,7 +114,7 @@ This command will build the code for the Dataflow pipeline, upload it to the spe
 
 While the pipeline is running you can view its status from the [Google Developers Console](https://console.developers.google.com) and navigating to "Big Data" > "Cloud Dataflow". There, click on the running job ID and you can view a graphical rendering of the pipeline and examine job logging output along with information about each pipeline stage. Here is an example screenshot of a running Dataflow job:
 
-asdfasdfasdf
+![Running Dataflow job](images/dataflow-log-analytics-ui.png)
 
 ### View BigQuery Data
 
