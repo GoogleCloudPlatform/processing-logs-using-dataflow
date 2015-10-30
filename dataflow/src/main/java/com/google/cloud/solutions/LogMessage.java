@@ -29,6 +29,7 @@ class LogMessage {
     @Nullable private String httpMethod;
     @Nullable private String destination;
 
+    @SuppressWarnings("unused")
     public LogMessage() {}
 
     public LogMessage(Instant timestamp, int httpStatusCode, double responseTime,
