@@ -22,6 +22,8 @@ TEMPLATE="{{(index ((index .items 0).status.loadBalancer.ingress) 0).ip}}:{{(ind
 function usage
 {
     echo "load.sh REQUESTS CONCURRENCY"
+    echo -e "\nexample:"
+    echo "load.sh 10000 100"
 }
 
 if [[ -z $@ ]]; then
@@ -36,14 +38,11 @@ LOCATE_HOST="$(kubectl get services -l name=locate-service -o template --templat
 echo "done"    
 
 echo "* Testing ${HOME_HOST}/home"
-ab -n ${REQUESTS} -c ${CONCURRENT} ${HOME_HOST}/home >/dev/null 2>&1 &
+ab -n ${REQUESTS} -c ${CONCURRENT} ${HOME_HOST}/home >/dev/null
 
 echo "* Testing ${BROWSE_HOST}/browse"
-for i in {1..100}; do
-    ab -n ${REQUESTS} -c ${CONCURRENT} ${BROWSE_HOST}/browse/$i >/dev/null 2>&1 &
-done
+ab -n ${REQUESTS} -c ${CONCURRENT} ${BROWSE_HOST}/browse/$i >/dev/null
+
 
 echo "* Testing ${LOCATE_HOST}/locate"
-for i in {1..100}; do
-    ab -n ${REQUESTS} -c ${CONCURRENT} ${LOCATE_HOST}/locate/$i?zipcode=12345 >/dev/null 2>&1 &
-done
+ab -n ${REQUESTS} -c ${CONCURRENT} ${LOCATE_HOST}/locate/$i?zipcode=12345 >/dev/null
