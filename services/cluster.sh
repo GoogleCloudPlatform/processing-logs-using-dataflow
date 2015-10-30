@@ -18,8 +18,9 @@ set -e
 MACHINE_TYPE=g1-small
 ZONE=us-central1-f
 NUM_NODES=1
-PROJECT_ID=${3}
-CLUSTER_NAME=${1}
+PROJECT_ID=${1}
+CLUSTER_NAME=${2}
+COMMAND=${3}
 
 function error_exit
 {
@@ -29,7 +30,7 @@ function error_exit
 
 function usage
 {
-    echo "$ cluster.sh CLUSTER_NAME [up|down] PROJECT_ID"
+    echo "$ cluster.sh PROJECT_ID CLUSTER_NAME [up|down]"
 }
 
 if [[ -z $@ ]]; then
@@ -37,9 +38,9 @@ if [[ -z $@ ]]; then
     exit 0
 fi
 
-case "$2" in
+case "$COMMAND" in
     up )
-        echo -n "* Creating Google Container Engine cluster ${CLUSTER_NAME} under project ${PROJECT_ID}..."
+        echo "* Creating Google Container Engine cluster ${CLUSTER_NAME} under project ${PROJECT_ID}..."
         gcloud container clusters create ${CLUSTER_NAME} \
           --scopes monitoring,logging-write \
           --project ${PROJECT_ID} \
@@ -49,30 +50,30 @@ case "$2" in
           --quiet 2>&1 >/dev/null || error_exit "Error creating Google Container Engine cluster"
         echo "done"
 
-        echo "* Deploying microservices Replication Controllers..."
+        echo -e "\n* Deploying microservices Replication Controllers..."
         for f in `ls kubernetes/*-controller.yaml`; do
             kubectl create -f $f
         done
 
-        echo "* Deploying microservices Services..."
+        echo -e "\n* Deploying microservices Services..."
         for f in `ls kubernetes/*-service.yaml`; do
             kubectl create -f $f
         done
 
-        echo "* Waiting 2 minutes for Controllers/Services to be deployed..."
+        echo -e "\n* Waiting 2 minutes for Controllers/Services to be deployed..."
         sleep 120
 
-        echo "* Getting Replication Controllers:"
+        echo -e "\n* Getting Replication Controllers:"
         kubectl get rc
 
-        echo "* Getting Pods:"
+        echo -e "\n* Getting Pods:"
         kubectl get pods
 
-        echo "* Getting Services:"
+        echo -e "\n* Getting Services:"
         kubectl get services        
         ;;
     down )
-        echo -n "* Deleting Google Container Engine cluster ${CLUSTER_NAME} under project ${PROJECT_ID}..."
+        echo "* Deleting Google Container Engine cluster ${CLUSTER_NAME} under project ${PROJECT_ID}..."
         gcloud container clusters delete ${CLUSTER_NAME} \
         --project=${PROJECT_ID} \
         --quiet >/dev/null || error_exit "Error deleting Google Container Engine cluster"
