@@ -15,8 +15,10 @@
 
 set -e
 
-PROJECT_ID=${3}
-GCS_BUCKET=${4}
+PROJECT_ID=${1}
+GCS_BUCKET=${2}
+MODE=${3}
+COMMAND=${4}
 TEMPLATE="{{(index .items 0).metadata.name}}_{{(index .items 0).metadata.namespace}}_{{(index ((index .items 0).spec.containers) 0).name}}"
 
 function error_exit
@@ -27,7 +29,8 @@ function error_exit
 
 function usage
 {
-    echo "logging.sh [streaming|batch] [up|down] PROJECT_ID BUCKET_NAME"
+    echo "logging.sh PROJECT_ID BUCKET_NAME [streaming|batch] [up|down]"
+    echo -e "\nScript will fail with existing buckets, please supply a new BUCKET_NAME"
 }
 
 function get_service_names
@@ -45,11 +48,11 @@ if [[ -z $@ ]]; then
     exit 0
 fi
 
-get_service_names
+# get_service_names
 
-case "$1" in
+case "$MODE" in
     streaming )
-        case "$2" in
+        case "$COMMAND" in
             up )
                 echo -n "* Creating Pub/Sub topics..."
                 for s in ${SERVICE_NAMES[@]}; do 
@@ -107,9 +110,14 @@ case "$1" in
         esac
         ;;
     batch )
-        case "$2" in
+        case "$COMMAND" in
             up )
                 echo -n "* Creating Google Cloud Storage bucket gs://${GCS_BUCKET}..."
+
+                if [[ $(gsutil ls | grep '${GCS_BUCKET}') -eq 0 ]]; then
+                    error_exit "gs://${GCS_BUCKET} exists, please choose a new bucket name"
+                fi
+
                 gsutil -q mb gs://${GCS_BUCKET}
                 gsutil -q acl ch -g cloud-logs@google.com:O gs://${GCS_BUCKET}
                 echo "done"
