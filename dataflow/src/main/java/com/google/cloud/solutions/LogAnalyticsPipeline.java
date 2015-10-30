@@ -17,7 +17,6 @@ package com.google.cloud.solutions;
 
 import com.google.api.client.json.JsonParser;
 import com.google.api.client.json.jackson2.JacksonFactory;
-import com.google.api.client.util.DateTime;
 import com.google.api.services.bigquery.model.TableFieldSchema;
 import com.google.api.services.bigquery.model.TableRow;
 import com.google.api.services.bigquery.model.TableSchema;
@@ -38,7 +37,6 @@ import org.joda.time.Duration;
 import org.joda.time.Instant;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
-import org.joda.time.format.ISODateTimeFormat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,29 +69,12 @@ public class LogAnalyticsPipeline {
             LogMessage logMessage = parseEntry(c.element());
             if(logMessage != null) {
                 if(this.outputWithTimestamp) {
-                    c.outputWithTimestamp(logMessage,
-                      getTimestampFromEntry(c.element()));
+                    c.outputWithTimestamp(logMessage, logMessage.getTimestamp());
                 }
                 else {
                     c.output(logMessage);
                 }
             }
-        }
-
-        private Instant getTimestampFromEntry(String entry) {
-            String timestamp = "";
-            DateTimeFormatter fmt = ISODateTimeFormat.dateTimeNoMillis();
-
-            try {
-                JsonParser parser = new JacksonFactory().createJsonParser(entry);
-                LogEntry logEntry = parser.parse(LogEntry.class);
-                timestamp = logEntry.getMetadata().getTimestamp();
-            }
-            catch (IOException e) {
-                LOG.error("IOException converting Cloud Logging JSON to LogEntry");
-            }
-
-            return fmt.parseDateTime(timestamp).toInstant();
         }
 
         private LogMessage parseEntry(String entry) {
@@ -149,15 +130,15 @@ public class LogAnalyticsPipeline {
     private static class LogMessageTableRowFn extends DoFn<LogMessage, TableRow> {
         @Override
         public void processElement(ProcessContext c) {
-            LogMessage e = c.element();
+            LogMessage msg = c.element();
 
             TableRow row = new TableRow()
-              .set("timestamp", new DateTime(e.getTimestamp().toDateTime().toDate()))
-              .set("httpStatusCode", e.getHttpStatusCode())
-              .set("responseTime", e.getResponseTime())
-              .set("source", e.getSource())
-              .set("httpMethod", e.getHttpMethod())
-              .set("destination", e.getDestination());
+              .set("timestamp", msg.getTimestamp().toString())
+              .set("httpStatusCode", msg.getHttpStatusCode())
+              .set("responseTime", msg.getResponseTime())
+              .set("source", msg.getSource())
+              .set("httpMethod", msg.getHttpMethod())
+              .set("destination", msg.getDestination());
 
             c.output(row);
         }
