@@ -49,15 +49,15 @@ First, change the current directory to `services`:
 
 Next, deploy the Container Engine cluster along with the sample web applications:
 
-    $ ./cluster.sh CLUSTER-NAME up PROJECT-ID
+    $ ./cluster.sh PROJECT-ID CLUSTER-NAME up
 
 The script will deploy a single-node Container Engine cluster, deploy the web applications, and expose the applications as Kubernetes Services.
 
 ### Setup Cloud Logging
 
-The next step is to configure Cloud Logging to export the web application logs to Google Cloud Storage. The following script will first create a Cloud Storage bucket, configure the appropriate permissions, and setup automated export from the web applications running on Container Engine to Cloud Storage.
+The next step is to configure Cloud Logging to export the web application logs to Google Cloud Storage. The following script will first create a Cloud Storage bucket, configure the appropriate permissions, and setup automated export from the web applications running on Container Engine to Cloud Storage. **Note:** the `BUCKET-NAME` should not be an existing Cloud Storage bucket.
 
-    $ ./logging.sh batch up PROJECT-ID BUCKET-NAME
+    $ ./logging.sh PROJECT-ID BUCKET-NAME batch up
 
 ### Generate Requests
 
@@ -89,26 +89,13 @@ First, change the current directory to `dataflow`:
 
     $ cd dataflow-log-analytics/dataflow
 
-Next, execute the pipeline using `mvn`:
+Next, execute the pipeline (**note:** `BUCKET-NAME` should be the same as the one used above for the logging setup):
 
-    $ mvn compile exec:java \
-        -Dexec.mainClass=com.google.cloud.solutions.LogAnalyticsPipeline \
-        -Dexec.args="\
-        --project=PROJECT-ID \
-        --stagingLocation=gs://BUCKET-NAME/staging \
-        --runner=BlockingDataflowPipelineRunner \
-        --homeLogSource=gs://BUCKET-NAME/kubernetes.home-service*/*/*/*/*.json \
-        --browseLogSource=gs://BUCKET-NAME/kubernetes.browse-service*/*/*/*/*.json \
-        --locateLogSource=gs://BUCKET-NAME/kubernetes.locate-service*/*/*/*/*.json \
-        --allLogsTableName=DATASET-NAME.all_logs_table \
-        --maxRespTimeTableName=DATASET-NAME.max_response_time_table \
-        --meanRespTimeTableName=DATASET-NAME.mean_response_time_table"
-
+    $ ./pipeline.sh run PROJECT-ID DATASET-NAME BUCKET-NAME
+ 
 This command will build the code for the Dataflow pipeline, upload it to the specified staging area, and launch the job. To see all execution options available for this pipeline, run the following:
 
-    $ mvn compile exec:java \
-        -Dexec.mainClass=com.google.cloud.solutions.LogAnalyticsPipeline \
-        -Dexec.args="--help=LogAnalyticsPipeline"
+    $ ./pipeline.sh options
 
 ### Monitoring Pipeline
 
@@ -131,9 +118,9 @@ First, delete the BigQuery dataset:
 Next, deactivate the Cloud Logging exports (**note:** this will delete the exports and the specified Cloud Storage bucket):
 
     $ cd dataflow-log-analytics/services
-    $ ./logging.sh batch down PROJECT-ID BUCKET-NAME
+    $ ./logging.sh PROJECT-ID BUCKET-NAME batch down
 
 Finally, delete the Container Engine cluster used to run the sample web applications:
 
     $ cd dataflow-log-analytics/services
-    $ ./cluster.sh CLUSTER-NAME down PROJECT-ID
+    $ ./cluster.sh PROJECT-ID CLUSTER-NAME down
