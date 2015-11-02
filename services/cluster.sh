@@ -79,5 +79,9 @@ case "$COMMAND" in
         --quiet >/dev/null || error_exit "Error deleting Google Container Engine cluster"
         echo "done"
         ;;
+    * )
+        usage
+        exit 1
+        ;;
 esac
 

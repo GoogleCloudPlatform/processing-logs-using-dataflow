@@ -152,4 +152,9 @@ case "$MODE" in
     help )
         usage
         ;;
+    * )
+        usage
+        exit 1
+        ;;
+
 esac
