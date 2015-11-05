@@ -48,7 +48,7 @@ if [[ -z $@ ]]; then
     exit 0
 fi
 
-# get_service_names
+get_service_names
 
 case "$MODE" in
     streaming )
@@ -114,9 +114,9 @@ case "$MODE" in
             up )
                 echo -n "* Creating Google Cloud Storage bucket gs://${GCS_BUCKET}..."
 
-                if [[ $(gsutil ls | grep '${GCS_BUCKET}') -eq 0 ]]; then
-                    error_exit "gs://${GCS_BUCKET} exists, please choose a new bucket name"
-                fi
+                # if [[ $(gsutil ls | grep '${GCS_BUCKET}') -eq 0 ]]; then
+                #     error_exit "gs://${GCS_BUCKET} exists, please choose a new bucket name"
+                # fi
 
                 gsutil -q mb gs://${GCS_BUCKET}
                 gsutil -q acl ch -g cloud-logs@google.com:O gs://${GCS_BUCKET}
