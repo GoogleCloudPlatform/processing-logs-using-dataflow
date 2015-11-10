@@ -75,7 +75,8 @@ case "$COMMAND" in
     down )
         echo "* Deleting Google Container Engine cluster ${CLUSTER_NAME} under project ${PROJECT_ID}..."
         gcloud container clusters delete ${CLUSTER_NAME} \
-        --project=${PROJECT_ID} \
+        --project ${PROJECT_ID} \
+        --zone ${ZONE} \
         --quiet >/dev/null || error_exit "Error deleting Google Container Engine cluster"
         echo "done"
         ;;
