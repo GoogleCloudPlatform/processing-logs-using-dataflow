@@ -54,7 +54,10 @@ public interface LogAnalyticsPipelineOptions extends DataflowPipelineOptions {
     void setMaxRespTimeTableName(String maxRespTimeTableName);
 
     @Description("BigQuery table schema for max-response-time table, comma-separated values of [field-name]:[TYPE]")
+    // [START maxResponseTimeTableSchema]
     @Default.String("destination:STRING,aggResponseTime:FLOAT")
+    // [END maxResponseTimeTableSchema]
+
     String getMaxRespTimeTableSchema();
     void setMaxRespTimeTableSchema(String maxRespTimeTableSchema);
 

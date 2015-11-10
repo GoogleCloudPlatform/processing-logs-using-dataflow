@@ -226,50 +226,64 @@ public class LogAnalyticsPipeline {
          */
         else {
             outputWithTimestamp = true;
+            // [START readingData]
             homeLogs = p.apply(TextIO.Read.named("homeLogsTextRead").from(options.getHomeLogSource()));
             browseLogs = p.apply(TextIO.Read.named("browseLogsTextRead").from(options.getBrowseLogSource()));
             locateLogs = p.apply(TextIO.Read.named("locateLogsTextRead").from(options.getLocateLogSource()));
+            // [END readingData]
         }
 
         /**
          * Flatten all input PCollections into a single PCollection
          */
+        // [START flattenCollections]
         PCollection<String> allLogs = PCollectionList
           .of(homeLogs)
           .and(browseLogs)
           .and(locateLogs)
           .apply(Flatten.<String>pCollections());
+        // [END flattenCollections]
 
         /**
          * Transform "allLogs" PCollection<String> to PCollection<LogMessage> and apply custom windowing scheme
          */
-        PCollection<LogMessage> logCollection = allLogs
-          .apply(ParDo.named("allLogsToLogMessage").of(new EmitLogMessageFn(outputWithTimestamp, options.getLogRegexPattern())))
+        // [START transformStringToLogMessage]
+        PCollection<LogMessage> allLogMessages = allLogs
+          .apply(ParDo.named("allLogsToLogMessage").of(new EmitLogMessageFn(outputWithTimestamp, options.getLogRegexPattern())));
+        // [END transformStringToLogMessage]
+
+        // [START applyWindowing]
+        PCollection<LogMessage> allLogMessagesDaily = allLogMessages
           .apply(Window.named("allLogMessageToDaily").<LogMessage>into(FixedWindows.of(Duration.standardDays(1))));
+        // [END applyWindowing]
 
         /**
          * Transform "allLogs" PCollection<LogMessage> to PCollection<TableRow>
          */
-        PCollection<TableRow> logsAsTableRows = logCollection
+        // [START logMessageToTableRow]
+        PCollection<TableRow> logsAsTableRows = allLogMessagesDaily
           .apply(ParDo.named("logMessageToTableRow").of(new LogMessageTableRowFn()));
+        // [END logMessageToTableRow]
 
         /**
          * Output "allLogs" PCollection<TableRow> to BigQuery
          */
         TableSchema allLogsTableSchema = TableRowOutputTransform.createTableSchema(options.getAllLogsTableSchema());
+        // [START allLogsToBigQuery]
         logsAsTableRows.apply(BigQueryIO.Write
           .named("allLogsToBigQuery")
           .to(options.getAllLogsTableName())
           .withSchema(allLogsTableSchema)
           .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_APPEND)
           .withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_IF_NEEDED));
+        // [END allLogsToBigQuery]
 
         /**
          * Create new PCollection<KV<String,Double>>
          * - Contains "destination->responseTime" key-value pairs
          * - Used for computing responseTime aggregations
          */
-        PCollection<KV<String,Double>> destResponseTimeCollection = logCollection
+        PCollection<KV<String,Double>> destResponseTimeCollection = allLogMessagesDaily
           .apply(ParDo.named("logMessageToDestRespTime").of(new DoFn<LogMessage, KV<String, Double>>() {
               @Override
               public void processElement(ProcessContext processContext) throws Exception {
@@ -284,12 +298,19 @@ public class LogAnalyticsPipeline {
          *   - destination->maxResponseTime and destination->meanResponseTime
          * - Use custom PTransform to output PCollection to BigQuery
          */
-        PCollection<TableRow> destMaxRespTimeRows = destResponseTimeCollection
-          .apply(Combine.<String,Double,Double>perKey(new Max.MaxDoubleFn()))
+
+        // [START computeAggregations]
+        PCollection<KV<String,Double>> destMaxRespTime = destResponseTimeCollection
+          .apply(Combine.<String,Double,Double>perKey(new Max.MaxDoubleFn()));
+
+        PCollection<KV<String,Double>> destMeanRespTime = destResponseTimeCollection
+          .apply(Mean.<String,Double>perKey());
+        // [END computeAggregations]
+
+        PCollection<TableRow> destMaxRespTimeRows = destMaxRespTime
           .apply(new TableRowOutputTransform(options.getMaxRespTimeTableSchema(), options.getMaxRespTimeTableName()));
 
-        PCollection<TableRow> destMeanRespTimeRows = destResponseTimeCollection
-          .apply(Mean.<String,Double>perKey())
+        PCollection<TableRow> destMeanRespTimeRows = destMeanRespTime
           .apply(new TableRowOutputTransform(options.getMeanRespTimeTableSchema(), options.getMeanRespTimeTableName()));
 
         PipelineResult r = p.run();
