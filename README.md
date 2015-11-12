@@ -1,19 +1,18 @@
-# Building Log Analytics Pipelines using Cloud Dataflow
+# Processing Logs at Scale Using Cloud Dataflow
 
-This tutorial demonstrates how to use [Cloud Dataflow](http://cloud.google.com/dataflow) to analyze logs collected and exported by [Cloud Logging](http://cloud.google.com/logging), highlighting support for batch and streaming, multiple data sources, windowing, aggregations, and [BigQuery](http://cloud.google.com/bigquery) output.
+This tutorial demonstrates how to use [Google Cloud Dataflow](http://cloud.google.com/dataflow) to analyze logs collected and exported by [Google Cloud Logging](http://cloud.google.com/logging). The tutorial highlights support for batch and streaming, multiple data sources, windowing, aggregations, and [Google BigQuery](http://cloud.google.com/bigquery) output.
 
-For more information, refer to the [Building Log Analytics Pipelines using Cloud Dataflow](http://cloud.google.com/solutions/building-log-analytics-pipelines-using-cloud-dataflow) solution paper.
+For details about how the tutorial works, see [Processing Logs at Scale Using Cloud Dataflow](http://cloud.google.com/solutions/processing-logs-at-scale-using-dataflow) on the Google Cloud Platform website.
 
 ## Prerequisites
 
 * [Java JDK](http://www.oracle.com/technetwork/java/javase/downloads/index.html) (version 1.7 or greater)
 * [Maven](http://maven.apache.org) (version 3 or greater)
-* [Google Cloud Platform](http://cloud.google.com) account
+* A [Google Cloud Platform](http://cloud.google.com) account
 * Install and setup the [Google Cloud SDK](https://cloud.google.com/sdk/)
 
-After installing the Google Cloud SDK, install/update the following additional components using the `gcloud components update` command:
+After installing the Google Cloud SDK, run `gcloud components update` to install or update the following additional components:
 
-* App Engine Command Line Interface (Preview)
 * BigQuery Command Line Tool
 * Cloud SDK Core Libraries
 * gcloud Alpha Commands
@@ -21,12 +20,12 @@ After installing the Google Cloud SDK, install/update the following additional c
 * gcloud app Python Extensions
 * kubectl
 
-Now, set your preferred zone and project:
+Set your preferred zone and project:
 
     $ gcloud config set compute/zone ZONE
     $ gcloud config set project PROJECT-ID
 
-Finally, ensure the following APIs are enabled in the [Google Cloud Platform Console](https://console.developers.google.com/) (navigate to "APIs & auth" > "APIs"):
+Ensure the following APIs are enabled in the [Google Cloud Console](https://console.developers.google.com/). Navigate to **API Manager** and enable:
 
 * BigQuery
 * Google Cloud Dataflow
@@ -37,90 +36,90 @@ Finally, ensure the following APIs are enabled in the [Google Cloud Platform Con
 
 ## Sample Web Applications
 
-The `services` folder contains three simple applications (built using [Go](http://golang.org) and the [Gin](https://github.com/gin-gonic/gin) HTTP web framework). These applications will generate the logs to be analyzed by the Dataflow pipeline (below). The applications have been packaged as Docker images and are available via [Google Container Registry](https://gcr.io). **Note:** If you are interested in editing/updating these applications, refer to the [README](https://github.com/GoogleCloudPlatform/dataflow-log-analytics/tree/master/services).
+The `services` folder contains three simple applications built using [Go](http://golang.org) and the [Gin](https://github.com/gin-gonic/gin) HTTP web framework. These applications generate the logs to be analyzed by the Dataflow pipeline. The applications have been packaged as Docker images and are available through [Google Container Registry](https://gcr.io). **Note:** If you are interested in editing/updating these applications, refer to the [README](https://github.com/GoogleCloudPlatform/dataflow-log-analytics/tree/master/services).
 
-Inside the `services` folder are several scripts that can be used to facilitate deployment, configuration, and testing of the sample web applications.
+In the `services` folder, there are several scripts you can use to facilitate deployment, configuration, and testing of the sample web applications.
 
-### Deploy Container Engine Cluster
+### Deploy the Container Engine cluster
 
 First, change the current directory to `services`:
 
     $ cd dataflow-log-analytics/services
 
-Next, deploy the Container Engine cluster along with the sample web applications:
+Next, deploy the Container Engine cluster with the sample web applications:
 
     $ ./cluster.sh PROJECT-ID CLUSTER-NAME up
 
-The script will deploy a single-node Container Engine cluster, deploy the web applications, and expose the applications as Kubernetes Services.
+The script will deploy a single-node Container Engine cluster, deploy the web applications, and expose the applications as Kubernetes services.
 
-### Setup Cloud Logging
+### Set up Cloud Logging
 
-The next step is to configure Cloud Logging to export the web application logs to Google Cloud Storage. The following script will first create a Cloud Storage bucket, configure the appropriate permissions, and setup automated export from the web applications running on Container Engine to Cloud Storage. **Note:** the `BUCKET-NAME` should not be an existing Cloud Storage bucket.
+The next step is to configure Cloud Logging to export the web application logs to Google Cloud Storage. The following script first creates a Cloud Storage bucket, configures the appropriate permissions, and sets up automated export from the web applications to Cloud Storage. **Note:** the `BUCKET-NAME` should not be an existing Cloud Storage bucket.
 
     $ ./logging.sh PROJECT-ID BUCKET-NAME batch up
 
-### Generate Requests
+### Generate requests
 
-Now that the applications have been deployed and are logging via Cloud Logging, the following script can be used to generate requests against the applications:
+Now that the applications have been deployed and are logging through Cloud Logging, you can use the following script to generate requests against the applications:
 
     $ ./load.sh REQUESTS CONCURRENCY
 
-The script uses the Apache Bench [ab](https://httpd.apache.org/docs/2.2/programs/ab.html) tool to generate load against the deployed web applications. `REQUESTS` controls how many requests are issued to each application and `CONCURRENCY` controls how many concurrent requests are issued. The logs from the applications are shipped/exported to Cloud Storage in hourly batches, and it might take up to two hours before log entries begin to appear. Refer to the [Cloud Logging documentation](https://cloud.google.com/logging/docs/export/using_exported_logs) for more information.
+This script uses Apache Bench [ab](https://httpd.apache.org/docs/2.2/programs/ab.html) to generate load against the deployed web applications. `REQUESTS` controls how many requests are issued to each application and `CONCURRENCY` controls how many concurrent requests are issued. The logs from the applications are sent to Cloud Storage in hourly batches, and it can take up to two hours before log entries start to appear. For more information, see the [Cloud Logging documentation](https://cloud.google.com/logging/docs/export/using_exported_logs).
 
-### Examining Logs
+### Examining logs
 
-For information on examining logs or log structure in Cloud Storage, refer to the [Cloud Logging documentation](https://cloud.google.com/logging/docs/export/using_exported_logs#log_entries_in_google_cloud_storage)
+For information on examining logs or log structure in Cloud Storage, see the [Cloud Logging documentation](https://cloud.google.com/logging/docs/export/using_exported_logs#log_entries_in_google_cloud_storage).
 
-## Dataflow Pipeline
+## Cloud Dataflow pipeline
 
-The following diagram illustrates the structure and flow of the example Dataflow pipeline:
+The following diagram shows the structure and flow of the example Dataflow pipeline:
 
 ![Dataflow pipeline structure](images/dataflow-log-analytics-pipeline.png)
 
-### Create BigQuery Dataset
+### Create the BigQuery dataset
 
-Before deploying the pipeline, create the BigQuery dataset where output from the Dataflow pipeline will be stored:
-    
+Before deploying the pipeline, create the BigQuery dataset where output from the Cloud Dataflow pipeline will be stored:
+
     $ gcloud alpha bigquery datasets create DATASET-NAME
 
-### Execute Pipeline
+### Run the pipeline
 
 First, change the current directory to `dataflow`:
 
     $ cd dataflow-log-analytics/dataflow
 
-Next, execute the pipeline (**note:** `BUCKET-NAME` should be the same as the one used above for the logging setup):
+Next, Run the pipeline. Replace `BUCKET-NAME` with the same name you used for the logging setup:
 
     $ ./pipeline.sh run PROJECT-ID DATASET-NAME BUCKET-NAME
- 
-This command will build the code for the Dataflow pipeline, upload it to the specified staging area, and launch the job. To see all execution options available for this pipeline, run the following:
+
+This command builds the code for the Cloud Dataflow pipeline, uploads it to the specified staging area, and launches the job. To see all options available for this pipeline, run the following command:
 
     $ ./pipeline.sh options
 
-### Monitoring Pipeline
+### Monitoring the pipeline
 
-While the pipeline is running you can view its status from the [Google Developers Console](https://console.developers.google.com) and navigating to "Big Data" > "Cloud Dataflow". There, click on the running job ID and you can view a graphical rendering of the pipeline and examine job logging output along with information about each pipeline stage. Here is an example screenshot of a running Dataflow job:
+While the pipeline is running, you can see its status in the [Google Developers Console](https://console.developers.google.com). Navigate to **Dataflow** and then click the running job ID. You can see a graphical rendering of the pipeline and examine job logging output along with information about each pipeline stage. Here is an example screenshot of a running Cloud Dataflow job:
 
 ![Running Dataflow job](images/dataflow-log-analytics-ui.png)
 
-### View BigQuery Data
+### View BigQuery data
 
-Once the job has completed execution, you can view the output in the [Google BigQuery console](https://bigquery.cloud.google.com) and issue queries against the data.
+After the job has completed, you can see the output in the [BigQuery console](https://bigquery.cloud.google.com) and compose and run queries against the data.
 
-## Cleanup
+## Cleaning up
 
-To cleanup and remove all resources used in this example, refer to the following steps.
+To clean up and remove all resources used in this example:
 
-First, delete the BigQuery dataset:
+1. Delete the BigQuery dataset:
 
     $ gcloud alpha bigquery datasets delete DATASET-NAME
 
-Next, deactivate the Cloud Logging exports (**note:** this will delete the exports and the specified Cloud Storage bucket):
+1. Deactivate the Cloud Logging exports. This step deletes the exports and the specified Cloud Storage bucket:
 
     $ cd dataflow-log-analytics/services
     $ ./logging.sh PROJECT-ID BUCKET-NAME batch down
 
-Finally, delete the Container Engine cluster used to run the sample web applications:
+1. Delete the Container Engine cluster used to run the sample web applications:
 
     $ cd dataflow-log-analytics/services
     $ ./cluster.sh PROJECT-ID CLUSTER-NAME down
