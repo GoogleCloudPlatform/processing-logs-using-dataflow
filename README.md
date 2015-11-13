@@ -112,14 +112,14 @@ To clean up and remove all resources used in this example:
 
 1. Delete the BigQuery dataset:
 
-    $ gcloud alpha bigquery datasets delete DATASET-NAME
+        $ gcloud alpha bigquery datasets delete DATASET-NAME
 
 1. Deactivate the Cloud Logging exports. This step deletes the exports and the specified Cloud Storage bucket:
 
-    $ cd dataflow-log-analytics/services
-    $ ./logging.sh PROJECT-ID BUCKET-NAME batch down
+        $ cd dataflow-log-analytics/services
+        $ ./logging.sh PROJECT-ID BUCKET-NAME batch down
 
 1. Delete the Container Engine cluster used to run the sample web applications:
 
-    $ cd dataflow-log-analytics/services
-    $ ./cluster.sh PROJECT-ID CLUSTER-NAME down
+        $ cd dataflow-log-analytics/services
+        $ ./cluster.sh PROJECT-ID CLUSTER-NAME down
