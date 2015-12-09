@@ -90,11 +90,11 @@ First, change the current directory to `dataflow`:
 
 Next, Run the pipeline. Replace `BUCKET-NAME` with the same name you used for the logging setup:
 
-    $ ./pipeline.sh run PROJECT-ID DATASET-NAME BUCKET-NAME
+    $ ./pipeline.sh PROJECT-ID DATASET-NAME BUCKET-NAME run
 
 This command builds the code for the Cloud Dataflow pipeline, uploads it to the specified staging area, and launches the job. To see all options available for this pipeline, run the following command:
 
-    $ ./pipeline.sh options
+    $ ./pipeline.sh
 
 ### Monitoring the pipeline
 
