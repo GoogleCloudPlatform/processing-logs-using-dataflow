@@ -19,7 +19,8 @@ PROJECT_ID=${1}
 GCS_BUCKET=${2}
 MODE=${3}
 COMMAND=${4}
-TEMPLATE="{{(index .items 0).metadata.name}}_{{(index .items 0).metadata.namespace}}_{{(index ((index .items 0).spec.containers) 0).name}}"
+# TEMPLATE="{{(index .items 0).metadata.name}}_{{(index .items 0).metadata.namespace}}_{{(index ((index .items 0).spec.containers) 0).name}}"
+TEMPLATE="{{(index ((index .items 0).spec.containers) 0).name}}"
 
 function error_exit
 {

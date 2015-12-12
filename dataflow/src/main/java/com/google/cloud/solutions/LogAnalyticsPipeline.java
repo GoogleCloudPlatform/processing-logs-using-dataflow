@@ -83,7 +83,7 @@ public class LogAnalyticsPipeline {
             try {
                 JsonParser parser = new JacksonFactory().createJsonParser(entry);
                 LogEntry logEntry = parser.parse(LogEntry.class);
-                logString = logEntry.getStructPayload().get("log").toString();
+                logString = logEntry.getTextPayload();
             }
             catch (IOException e) {
                 LOG.error("IOException parsing entry: " + e.getMessage());
