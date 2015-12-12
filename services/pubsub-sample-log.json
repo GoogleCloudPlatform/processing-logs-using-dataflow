@@ -15,4 +15,28 @@
     "stream": "stdout",
     "log": "[GIN] 2015/08/20 - 04:10:36 |\u001b[97;42m 200 \u001b[0m|      54.792µs | 10.240.178.196:51491 |\u001b[97;44m  \u001b[0m GET     /home\n"
   }
+},
+{
+  "insertId": "2015-12-11|16:55:41.458730-08|10.106.60.5|-301264036",
+  "log": "sample-home-service",
+  "metadata": {
+    "labels": {
+      "compute.googleapis.com/resource_id": "10534995024296051175",
+      "compute.googleapis.com/resource_name": "fluentd-cloud-logging-gke-us-172d8d2d-node-ilxr",
+      "compute.googleapis.com/resource_type": "instance",
+      "container.googleapis.com/cluster_name": "us",
+      "container.googleapis.com/container_name": "sample-home-service",
+      "container.googleapis.com/instance_id": "10534995024296051175",
+      "container.googleapis.com/namespace_id": "",
+      "container.googleapis.com/namespace_name": "default",
+      "container.googleapis.com/pod_id": "",
+      "container.googleapis.com/pod_name": "home-service-4p1vb",
+      "container.googleapis.com/stream": "stdout"
+    },
+    "projectId": "parikhs-misc",
+    "serviceName": "container.googleapis.com",
+    "timestamp": "2015-12-12T00:53:30Z",
+    "zone": "us-central1-f"
+  },
+  "textPayload": "[GIN] 2015/12/12 - 00:53:30 |\u001b[97;42m 200 \u001b[0m|       46.65µs | 10.24.0.1:33505 |\u001b[97;44m  \u001b[0m GET     /home\n"
 }
