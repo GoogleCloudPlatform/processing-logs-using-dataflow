@@ -23,7 +23,7 @@ function usage
 {
     echo "load.sh REQUESTS CONCURRENCY"
     echo -e "\nexample:"
-    echo "load.sh 10000 100"
+    echo "load.sh 1000 100"
 }
 
 if [[ -z $@ ]]; then
@@ -38,11 +38,17 @@ LOCATE_HOST="$(kubectl get services -l name=locate-service -o template --templat
 echo "done"    
 
 echo "* Testing ${HOME_HOST}/home"
-ab -n ${REQUESTS} -c ${CONCURRENT} ${HOME_HOST}/home >/dev/null
+ab -n ${REQUESTS} -c ${CONCURRENT} "${HOME_HOST}/home" >/dev/null
 
-echo "* Testing ${BROWSE_HOST}/browse"
-ab -n ${REQUESTS} -c ${CONCURRENT} ${BROWSE_HOST}/browse/$i >/dev/null
+echo "* Testing 20 iterations of ${BROWSE_HOST}/browse"
+for (( i = 1; i < 20; i++ )); do
+    ab -n ${REQUESTS} -c ${CONCURRENT} "${BROWSE_HOST}/browse/product/$i" >/dev/null
+done
 
 
-echo "* Testing ${LOCATE_HOST}/locate"
-ab -n ${REQUESTS} -c ${CONCURRENT} ${LOCATE_HOST}/locate/$i?zipcode=12345 >/dev/null
+
+echo "* Testing 20 iterations of ${LOCATE_HOST}/locate"
+for (( i = 0; i < 20; i++ )); do
+    ab -n ${REQUESTS} -c ${CONCURRENT} "${LOCATE_HOST}/locate/$i?zipcode=12345" >/dev/null
+done
+
