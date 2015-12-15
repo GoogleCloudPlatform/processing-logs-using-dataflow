@@ -76,7 +76,7 @@ case "$MODE" in
                 for s in ${SERVICE_NAMES[@]}; do
                     gcloud beta logging sinks create ${s} \
                     pubsub.googleapis.com/projects/${PROJECT_ID}/topics/${s} \
-                    --log="kubernetes.${s}" \
+                    --log="${s}" \
                     --project=${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error creating Log Export sinks"
                 done
@@ -86,7 +86,7 @@ case "$MODE" in
                 echo -n "* Deleting Log Export sinks..."
                 for s in ${SERVICE_NAMES[@]}; do
                     gcloud beta logging sinks delete ${s} \
-                    --log="kubernetes.${s}" \
+                    --log="${s}" \
                     --project=${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error deleting Log Export sinks"
                 done                    
@@ -127,7 +127,7 @@ case "$MODE" in
                 for s in ${SERVICE_NAMES[@]}; do
                     gcloud beta logging sinks create ${s} \
                     storage.googleapis.com/${GCS_BUCKET} \
-                    --log="kubernetes.${s}" \
+                    --log="${s}" \
                     --project=${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error creating Log Export sinks"
                 done
@@ -137,7 +137,7 @@ case "$MODE" in
                 echo -n "* Deleting Log Export sinks..."
                 for s in ${SERVICE_NAMES[@]}; do
                     gcloud beta logging sinks delete ${s} \
-                    --log="kubernetes.${s}" \
+                    --log="${s}" \
                     --project=${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error deleting Log Export Sinks"
                 done
