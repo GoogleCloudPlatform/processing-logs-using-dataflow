@@ -33,7 +33,9 @@ spec:
     spec:
       containers:
         - name: sample-home-service
-          image: gcr.io/cloud-solutions-images/sample-home-service:latest
+          ## note that kubectl will not perform this variable substiution
+          ## see https://serverfault.com/questions/791715/using-environment-variables-in-kubernetes-deployment-spec
+          image: gcr.io/${PROJECT_ID}/sample-home-service:latest
           ports:
             - name: home-http
               containerPort: 8000

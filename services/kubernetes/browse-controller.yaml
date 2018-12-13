@@ -33,7 +33,7 @@ spec:
     spec:
       containers:
         - name: sample-browse-service
-          image: gcr.io/cloud-solutions-images/sample-browse-service:latest
+          image: gcr.io/${PROJECT_ID}/sample-browse-service:latest
           ports:
             - name: browse-http
               containerPort: 8100
