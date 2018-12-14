@@ -15,9 +15,9 @@ limitations under the License.
 
 package com.google.cloud.solutions;
 
-import com.google.cloud.dataflow.sdk.options.DataflowPipelineOptions;
-import com.google.cloud.dataflow.sdk.options.Default;
-import com.google.cloud.dataflow.sdk.options.Description;
+import org.apache.beam.runners.dataflow.options.DataflowPipelineOptions;
+import org.apache.beam.sdk.options.Default;
+import org.apache.beam.sdk.options.Description;
 
 @SuppressWarnings("unused")
 public interface LogAnalyticsPipelineOptions extends DataflowPipelineOptions {
