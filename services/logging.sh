@@ -119,15 +119,19 @@ case "$MODE" in
                 #     error_exit "gs://${GCS_BUCKET} exists, please choose a new bucket name"
                 # fi
 
+                # Create a Cloud Storage Bucket
                 gsutil -q mb gs://${GCS_BUCKET}
+                # Allow Stackdriver Logging access to the bucket
                 gsutil -q acl ch -g cloud-logs@google.com:O gs://${GCS_BUCKET}
+
                 echo "done"
 
+                # For each microservice, set up Stackdriver Logging exports
                 echo -n "* Creating Log Export sinks..."
                 for s in ${SERVICE_NAMES[@]}; do
                     gcloud beta logging sinks create ${s} \
                     storage.googleapis.com/${GCS_BUCKET} \
-                    --log="${s}" \
+                    --log-filter="resource.type=\"container\" \"${s}\"" \
                     --project=${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error creating Log Export sinks"
                 done
@@ -137,8 +141,6 @@ case "$MODE" in
                 echo -n "* Deleting Log Export sinks..."
                 for s in ${SERVICE_NAMES[@]}; do
                     gcloud beta logging sinks delete ${s} \
-                    --log="${s}" \
-                    --project=${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error deleting Log Export Sinks"
                 done
                 echo "done"
