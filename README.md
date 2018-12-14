@@ -4,6 +4,13 @@ This tutorial demonstrates how to use [Google Cloud Dataflow](http://cloud.googl
 
 For details about how the tutorial works, see [Processing Logs at Scale Using Cloud Dataflow](http://cloud.google.com/solutions/processing-logs-at-scale-using-dataflow) on the Google Cloud Platform website.
 
+
+## Architecture Overview 
+
+In this solution, a set of sample microservices run on [Google Kubernetes Engine](https://cloud.google.com/kubernetes-engine/) to implement a website. [Stackdriver Logging](https://cloud.google.com/logging/) collects logs from these services and then saves them to [Google Cloud Storage](https://cloud.google.com/storage/) buckets. [Google Cloud Dataflow](https://cloud.google.com/dataflow/) then processes the logs by extracting metadata and computing basic aggregations. The Cloud Dataflow pipeline is designed to process the log elements daily to generate aggregate metrics for server response times, based on the logs for each day. Finally, the output from Cloud Dataflow is loaded into [Google BigQuery](https://cloud.google.com/bigquery/) tables, where it can be analyzed to provide business intelligence.
+
+![](images/overview.png)
+
 ## Prerequisites
 
 * [Java JDK](http://www.oracle.com/technetwork/java/javase/downloads/index.html) (version 1.7 or greater)
@@ -20,10 +27,31 @@ After installing the Google Cloud SDK, run `gcloud components update` to install
 * gcloud app Python Extensions
 * kubectl
 
-Set your preferred zone and project:
+Define names for resources
 
-    $ gcloud config set compute/zone ZONE
-    $ gcloud config set project PROJECT-ID
+```bash
+# cd ~/projects/gcp/misc/processing-logs-using-dataflow
+export PROJECT_HOME=$(pwd)
+
+export PROJECT_ID="new-logs-demo" ## pick your favorite name here
+export CLUSTER_NAME="my-first-cluster-9995"  
+export BUCKET_NAME=${PROJECT_ID}-data-bucket
+
+# BigQuery dataset name, must be alphanumeric (plus underscores) 
+export DATASET_NAME=$(echo ${PROJECT_ID}-bq-data | tr "-" "_" )
+```
+
+
+Set your preferred zone and project:
+```bash
+# Configure GCP for project
+# gcloud config set compute/zone ZONE # e.g.
+#gcloud config set compute/zone europe-west1
+gcloud config set compute/zone us-central1-f
+
+gcloud config set project ${PROJECT_ID}
+```
+
 
 Ensure the following APIs are enabled in the [Google Cloud Console](https://console.developers.google.com/). Navigate to **API Manager** and enable:
 
@@ -34,41 +62,139 @@ Ensure the following APIs are enabled in the [Google Cloud Console](https://cons
 * Google Cloud Storage
 * Google Container Engine
 
+
+Or use the shell to enable them https://cloud.google.com/endpoints/docs/openapi/enable-api
+
+```bash
+gcloud services list --available | grep container
+
+gcloud services enable container.googleapis.com
+gcloud services enable containerregistry.googleapis.com
+```
+
+Typically the other permission are already enabled by default when using a test-GCP account. 
+
 ## Sample Web Applications
 
-The `services` folder contains three simple applications built using [Go](http://golang.org) and the [Gin](https://github.com/gin-gonic/gin) HTTP web framework. These applications generate the logs to be analyzed by the Dataflow pipeline. The applications have been packaged as Docker images and are available through [Google Container Registry](https://gcr.io). **Note:** If you are interested in editing/updating these applications, refer to the [README](https://github.com/GoogleCloudPlatform/dataflow-log-analytics/tree/master/services).
+The `services` folder contains three simple applications built using [Go](http://golang.org) and the [Gin](https://github.com/gin-gonic/gin) HTTP web framework. **These applications generate the logs to be analyzed by the Dataflow pipeline.**  The applications have been packaged as Docker images and are available through [Google Container Registry](https://gcr.io). **Note:** If you are interested in editing/updating these applications, refer to the [README](https://github.com/GoogleCloudPlatform/dataflow-log-analytics/tree/master/services).
 
 In the `services` folder, there are several scripts you can use to facilitate deployment, configuration, and testing of the sample web applications.
 
 ### Deploy the Container Engine cluster
 
-First, change the current directory to `services`:
+First, we need to build the project and [push the images](https://cloud.google.com/container-registry/docs/pushing-and-pulling) to the registry
 
-    $ cd dataflow-log-analytics/services
+```bash
+cd ${PROJECT_HOME}/services
+
+gcloud auth configure-docker
+
+make build image tag push
+```
+
+We can checkout the images in _Container Registry_ UI
+```
+open https://console.cloud.google.com/gcr/images/new-logs-demo?project=${PROJECT_ID}
+```
 
 Next, deploy the Container Engine cluster with the sample web applications:
 
-    $ ./cluster.sh PROJECT-ID CLUSTER-NAME up
+
+```bash
+./cluster.sh ${PROJECT_ID} ${CLUSTER_NAME} up
+
+## to shut it down use
+# ./cluster.sh ${PROJECT_ID} ${CLUSTER_NAME} down
+
+## to inspect cluster structure see
+open  https://console.cloud.google.com/kubernetes/workload_/gcloud/us-central1-f/${CLUSTER_NAME}?${PROJECT_ID}
+
+
+## to test the services extract the public IPs and e.g. do
+curl http://35.224.38.74:8100/browse/category/23
+
+## to reconnect to an existing cluster to use
+## see https://cloud.google.com/kubernetes-engine/docs/quickstart#create_cluster
+#gcloud container clusters list
+gcloud container clusters get-credentials ${CLUSTER_NAME}
+kubectl get pods  ## or do something else with the cluster
+```
+
 
 The script will deploy a single-node Container Engine cluster, deploy the web applications, and expose the applications as Kubernetes services.
 
+Check if there were any issues with the deployment! The cluster may not contain enough cpu power (g1-small -> 0.5 vCPU but (_Die Standard-CPU-Anfrage beträgt 100 MB oder 10 % einer CPU bzw. eines Kerns._). Also see https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/#meaning-of-cpu
+
+
 ### Set up Cloud Logging
 
-The next step is to configure Cloud Logging to export the web application logs to Google Cloud Storage. The following script first creates a Cloud Storage bucket, configures the appropriate permissions, and sets up automated export from the web applications to Cloud Storage. **Note:** the `BUCKET-NAME` should not be an existing Cloud Storage bucket.
 
-    $ ./logging.sh PROJECT-ID BUCKET-NAME batch up
+By default, Stackdriver logging collects only your container's standard output and standard error streams. It can be configured to also collect any logs your application writes to a file.
+
+![](images/stackdriver_gke_logs.png)
+
+The next step is to configure Cloud Logging to export the web application logs to Google Cloud Storage. The following script first creates a Cloud Storage bucket, configures the appropriate permissions, and sets up automated export from the web applications to Cloud Storage. **Note:** the `${BUCKET_NAME}` should not be an existing Cloud Storage bucket.
+
+For details see https://cloud.google.com/kubernetes-engine/docs/how-to/logging, https://cloud.google.com/storage/docs/gsutil/commands/mb and https://cloud.google.com/sdk/gcloud/reference/beta/logging/sinks/create
+
+
+
+```bash
+cd ${PROJECT_HOME}/services
+
+./logging.sh ${PROJECT_ID} ${BUCKET_NAME} batch up
+
+# ./logging.sh ${PROJECT_ID} ${BUCKET_NAME} batch down
+
+## to check that the sinks were correctly created run
+gcloud logging sinks list 
+```
+
+We can list the created buckets with `gsutil ls`.
+
+The sinks are listed in the GCP UI under
+```bash
+open https://console.cloud.google.com/logs/exports?project=${PROJECT_ID}
+```
+
+
+To ensure that data is logged we can create an event and listen on the pod logs
+```
+kubectl logs -f browse-service-2djpb &
+
+
+## TODO adjust IP based on `kubectl get services`
+curl http://35.224.38.74:8100/browse/category/23
+curl http://35.202.0.152:8200/locate/55?zipcode=12345
+```
+
+
+Finally, we can open the bucket directly
+```
+open https://console.cloud.google.com/storage/browser/${BUCKET_NAME}
+```
+
 
 ### Generate requests
 
 Now that the applications have been deployed and are logging through Cloud Logging, you can use the following script to generate requests against the applications:
 
-    $ ./load.sh REQUESTS CONCURRENCY
+```bash
+# Usage./load.sh REQUESTS CONCURRENCY
+./load.sh 100 2
+./load.sh 1 1
+```
 
 This script uses Apache Bench [ab](https://httpd.apache.org/docs/2.2/programs/ab.html) to generate load against the deployed web applications. `REQUESTS` controls how many requests are issued to each application and `CONCURRENCY` controls how many concurrent requests are issued. The logs from the applications are sent to Cloud Storage in hourly batches, and it can take up to two hours before log entries start to appear. For more information, see the [Cloud Logging documentation](https://cloud.google.com/logging/docs/export/using_exported_logs).
 
 ### Examining logs
 
 For information on examining logs or log structure in Cloud Storage, see the [Cloud Logging documentation](https://cloud.google.com/logging/docs/export/using_exported_logs#log_entries_in_google_cloud_storage).
+
+Check if the logs arrived in the _GCP Logging_ `open https://console.cloud.google.com/logs/viewer?project=${PROJECT_ID}`
+
+Troubleshooting hints https://cloud.google.com/logging/docs/export/?hl=en_US&_ga=2.100645598.-1938216270.1543417411#troubleshooting
+
 
 ## Cloud Dataflow pipeline
 
@@ -78,23 +204,39 @@ The following diagram shows the structure and flow of the example Dataflow pipel
 
 ### Create the BigQuery dataset
 
-Before deploying the pipeline, create the BigQuery dataset where output from the Cloud Dataflow pipeline will be stored:
+Before deploying the pipeline, [create the BigQuery dataset](https://cloud.google.com/bigquery/docs/datasets) where output from the Cloud Dataflow pipeline will be stored:
 
-    $ gcloud alpha bigquery datasets create DATASET-NAME
+```bash
+
+bq mk ${DATASET_NAME}
+```
 
 ### Run the pipeline
 
 First, change the current directory to `dataflow`:
 
-    $ cd dataflow-log-analytics/dataflow
+```
+cd ${PROJECT_HOME}/dataflow
+```
 
-Next, Run the pipeline. Replace `BUCKET-NAME` with the same name you used for the logging setup:
+Next, Run the pipeline. Replace `${BUCKET_NAME}` with the same name you used for the logging setup:
 
-    $ ./pipeline.sh PROJECT-ID DATASET-NAME BUCKET-NAME run
+```bash
+./pipeline.sh ${PROJECT_ID} ${DATASET_NAME} ${BUCKET_NAME} run
+```
+
 
 This command builds the code for the Cloud Dataflow pipeline, uploads it to the specified staging area, and launches the job. To see all options available for this pipeline, run the following command:
 
     $ ./pipeline.sh
+
+
+In case  it errors with
+```
+DataflowRunner requires gcpTempLocation, but failed to retrieve a value from PipelineOptions: Unable to get application default credentials. Please see https://developers.google.com/accounts/docs/application-default-credentials
+```
+you need to login with `gcloud auth application-default login`
+
 
 ### Monitoring the pipeline
 
@@ -112,14 +254,14 @@ To clean up and remove all resources used in this example:
 
 1. Delete the BigQuery dataset:
 
-        $ gcloud alpha bigquery datasets delete DATASET-NAME
+        $ gcloud alpha bigquery datasets delete ${DATASET_NAME}
 
 1. Deactivate the Cloud Logging exports. This step deletes the exports and the specified Cloud Storage bucket:
 
         $ cd dataflow-log-analytics/services
-        $ ./logging.sh PROJECT-ID BUCKET-NAME batch down
+        $ ./logging.sh ${PROJECT_ID} ${BUCKET_NAME} batch down
 
 1. Delete the Container Engine cluster used to run the sample web applications:
 
         $ cd dataflow-log-analytics/services
-        $ ./cluster.sh PROJECT-ID CLUSTER-NAME down
+        $ ./cluster.sh ${PROJECT_ID} ${CLUSTER_NAME} down
