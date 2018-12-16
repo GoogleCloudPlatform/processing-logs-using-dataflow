@@ -4,6 +4,23 @@ This tutorial demonstrates how to use [Google Cloud Dataflow](http://cloud.googl
 
 For details about how the tutorial works, see [Processing Logs at Scale Using Cloud Dataflow](http://cloud.google.com/solutions/processing-logs-at-scale-using-dataflow) on the Google Cloud Platform website.
 
+[TOC levels=3]: # " "
+
+- [Architecture Overview](#architecture-overview)
+- [Prerequisites](#prerequisites)
+- [Sample Web Applications](#sample-web-applications)
+    - [Deploy the Container Engine cluster](#deploy-the-container-engine-cluster)
+    - [Set up Cloud Logging](#set-up-cloud-logging)
+    - [Generate requests](#generate-requests)
+    - [Examining logs](#examining-logs)
+- [Cloud Dataflow Pipeline](#cloud-dataflow-pipeline)
+    - [Create the BigQuery dataset](#create-the-bigquery-dataset)
+    - [Run the pipeline](#run-the-pipeline)
+    - [Monitoring the pipeline](#monitoring-the-pipeline)
+    - [View BigQuery data](#view-bigquery-data)
+- [Cleaning Up](#cleaning-up)
+
+
 
 ## Architecture Overview 
 
@@ -70,6 +87,7 @@ gcloud services list --available | grep container
 
 gcloud services enable container.googleapis.com
 gcloud services enable containerregistry.googleapis.com
+gcloud services enable dataflow.googleapis.com
 ```
 
 Typically the other permission are already enabled by default when using a test-GCP account. 
@@ -182,7 +200,6 @@ Now that the applications have been deployed and are logging through Cloud Loggi
 ```bash
 # Usage./load.sh REQUESTS CONCURRENCY
 ./load.sh 100 2
-./load.sh 1 1
 ```
 
 This script uses Apache Bench [ab](https://httpd.apache.org/docs/2.2/programs/ab.html) to generate load against the deployed web applications. `REQUESTS` controls how many requests are issued to each application and `CONCURRENCY` controls how many concurrent requests are issued. The logs from the applications are sent to Cloud Storage in hourly batches, and it can take up to two hours before log entries start to appear. For more information, see the [Cloud Logging documentation](https://cloud.google.com/logging/docs/export/using_exported_logs).
@@ -201,7 +218,7 @@ So after an hour, we can check if the logs have arrived in the _GCP Logging_ `op
 Troubleshooting hints https://cloud.google.com/logging/docs/export/?hl=en_US&_ga=2.100645598.-1938216270.1543417411#troubleshooting
 
 
-## Cloud Dataflow pipeline
+## Cloud Dataflow Pipeline
 
 The following diagram shows the structure and flow of the example Dataflow pipeline:
 
@@ -231,11 +248,18 @@ Next, Run the pipeline. Replace `${BUCKET_NAME}` with the same name you used for
 ```
 
 
+
 This command builds the code for the Cloud Dataflow pipeline, uploads it to the specified staging area, and launches the job. To see all options available for this pipeline, run the following command:
 
     $ ./pipeline.sh
 
 
+To run locally we can use a direct runner:
+```bash
+mvn compile exec:java \
+    -Dexec.mainClass=com.google.cloud.solutions.LogAnalyticsPipeline \
+    -Dexec.args="--project=new-logs-demo --stagingLocation=gs://new-logs-demo-data-bucket/staging --runner=DirectRunner --homeLogSource=gs://new-logs-demo-data-bucket/sample-home-service/*/*/*/*.json --browseLogSource=gs://new-logs-demo-data-bucket/sample-browse-service/*/*/*/*.json --locateLogSource=gs://new-logs-demo-data-bucket/sample-locate-service/*/*/*/*.json --tempLocation=gs://new-logs-demo-data-bucket/temp --allLogsTableName=new_logs_demo_bq_data.all_logs_table --maxRespTimeTableName=new_logs_demo_bq_data.max_response_time_table --meanRespTimeTableName=new_logs_demo_bq_data.mean_response_time_table "
+```
 In case  it errors with
 ```
 DataflowRunner requires gcpTempLocation, but failed to retrieve a value from PipelineOptions: Unable to get application default credentials. Please see https://developers.google.com/accounts/docs/application-default-credentials
@@ -253,7 +277,11 @@ While the pipeline is running, you can see its status in the [Google Developers 
 
 After the job has completed, you can see the output in the [BigQuery console](https://bigquery.cloud.google.com) and compose and run queries against the data.
 
-## Cleaning up
+```bash
+open https://console.cloud.google.com/bigquery?project=${PROJECT_ID}
+```
+
+## Cleaning Up
 
 To clean up and remove all resources used in this example:
 
@@ -270,3 +298,9 @@ To clean up and remove all resources used in this example:
 
         $ cd dataflow-log-analytics/services
         $ ./cluster.sh ${PROJECT_ID} ${CLUSTER_NAME} down
+
+
+Alternatively, we can also the delete the complete project in a single step
+```bash
+gcloud projects delete ${PROJECT_ID}
+```

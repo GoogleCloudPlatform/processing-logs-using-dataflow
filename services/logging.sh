@@ -121,7 +121,9 @@ case "$MODE" in
 
                 # Create a Cloud Storage Bucket
                 gsutil -q mb gs://${GCS_BUCKET}
+
                 # Allow Stackdriver Logging access to the bucket
+                ## https://cloud.google.com/storage/docs/gsutil/commands/acl
                 gsutil -q acl ch -g cloud-logs@google.com:O gs://${GCS_BUCKET}
 
                 echo "done"
@@ -134,6 +136,8 @@ case "$MODE" in
                     --log-filter="resource.type=\"container\" \"${s}\"" \
                     --project=${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error creating Log Export sinks"
+
+                    # TODO we need to grant the associcated service account access to the bucket
                 done
                 echo "done"
                 ;;
