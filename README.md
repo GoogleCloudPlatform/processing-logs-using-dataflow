@@ -164,8 +164,8 @@ kubectl logs -f browse-service-2djpb &
 
 
 ## TODO adjust IP based on `kubectl get services`
-curl http://35.224.38.74:8100/browse/category/23
-curl http://35.202.0.152:8200/locate/55?zipcode=12345
+curl http://35.224.38.74:8100/browse/category/67
+curl http://35.202.0.152:8200/locate/66?zipcode=12345
 ```
 
 
@@ -191,7 +191,12 @@ This script uses Apache Bench [ab](https://httpd.apache.org/docs/2.2/programs/ab
 
 For information on examining logs or log structure in Cloud Storage, see the [Cloud Logging documentation](https://cloud.google.com/logging/docs/export/using_exported_logs#log_entries_in_google_cloud_storage).
 
-Check if the logs arrived in the _GCP Logging_ `open https://console.cloud.google.com/logs/viewer?project=${PROJECT_ID}`
+Most importantly we need some patience here because [as documented](https://cloud.google.com/logging/docs/export/using_exported_logs#gcs-availability)
+> Log entries going to Cloud Storage are batched and sent out approximately every hour.
+
+So it will take an hour or so before logs actually arrive in our bucket.
+
+So after an hour, we can check if the logs have arrived in the _GCP Logging_ `open https://console.cloud.google.com/logs/viewer?project=${PROJECT_ID}`
 
 Troubleshooting hints https://cloud.google.com/logging/docs/export/?hl=en_US&_ga=2.100645598.-1938216270.1543417411#troubleshooting
 
