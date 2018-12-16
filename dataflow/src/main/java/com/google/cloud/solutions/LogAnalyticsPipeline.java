@@ -17,11 +17,11 @@ package com.google.cloud.solutions;
 
 import com.google.api.client.json.JsonParser;
 import com.google.api.client.json.jackson2.JacksonFactory;
-import com.google.api.servicecontrol.v1.LogEntry;
 import com.google.api.services.bigquery.model.TableFieldSchema;
 import com.google.api.services.bigquery.model.TableRow;
 import com.google.api.services.bigquery.model.TableSchema;
 
+import com.google.api.services.logging.v2.model.LogEntry;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.PipelineResult;
 import org.apache.beam.sdk.io.TextIO;
@@ -29,11 +29,13 @@ import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO;
 import org.apache.beam.sdk.io.gcp.pubsub.PubsubIO;
 import org.apache.beam.sdk.options.PipelineOptionsFactory;
 import org.apache.beam.sdk.transforms.*;
+import org.apache.beam.sdk.transforms.display.DisplayData;
 import org.apache.beam.sdk.transforms.windowing.FixedWindows;
 import org.apache.beam.sdk.transforms.windowing.Window;
 import org.apache.beam.sdk.values.KV;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PCollectionList;
+import org.apache.beam.sdk.values.TypeDescriptor;
 import org.joda.time.Duration;
 import org.joda.time.Instant;
 import org.joda.time.format.DateTimeFormat;
@@ -67,13 +69,13 @@ public class LogAnalyticsPipeline {
 
 
         @ProcessElement
-        public void processElement(@Element String element, OutputReceiver<String> receiver) {
+        public void processElement(@Element String element, OutputReceiver<LogMessage> receiver) {
             LogMessage logMessage = parseEntry(element);
             if (logMessage != null) {
                 if (this.outputWithTimestamp) {
-                    receiver.outputWithTimestamp(logMessage.toString(), logMessage.getTimestamp());
+                    receiver.outputWithTimestamp(logMessage, logMessage.getTimestamp());
                 } else {
-                    receiver.output(logMessage.toString());
+                    receiver.output(logMessage);
                 }
             }
         }
@@ -170,7 +172,7 @@ public class LogAnalyticsPipeline {
         public PCollection<TableRow> expand(PCollection<KV<String, Double>> input) {
             PCollection<TableRow> output = input.
                     apply(ParDo.of(new DoFn<KV<String, Double>, TableRow>() {
-                        //                  @Override
+                        @ProcessElement
                         public void processElement(ProcessContext c) {
                             KV<String, Double> e = c.element();
 
@@ -186,7 +188,14 @@ public class LogAnalyticsPipeline {
                     .to(this.tableName)
                     .withSchema(createTableSchema(this.tableSchema))
                     .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_APPEND)
-                    .withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_IF_NEEDED));
+                    .withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_IF_NEEDED)
+                    .withFormatFunction(new SimpleFunction<TableRow, TableRow>() {
+                        @Override
+                        public TableRow apply(TableRow input) {
+                            return input;
+                        }
+                    }));
+
 
             return output;
         }
@@ -211,8 +220,8 @@ public class LogAnalyticsPipeline {
          */
         if (options.isStreaming()) {
             outputWithTimestamp = false;
-            homeLogs = p.apply(PubsubIO.readStrings().fromSubscription(options.getHomeLogSource()));
-            browseLogs = p.apply(PubsubIO.readStrings().fromSubscription(options.getBrowseLogSource()));
+//            homeLogs = p.apply(PubsubIO.readStrings().fromSubscription(options.getHomeLogSource()));
+//            browseLogs = p.apply(PubsubIO.readStrings().fromSubscription(options.getBrowseLogSource()));
             locateLogs = p.apply(PubsubIO.readStrings().fromSubscription(options.getLocateLogSource()));
         }
         /*
@@ -221,8 +230,8 @@ public class LogAnalyticsPipeline {
         else {
             outputWithTimestamp = true;
             // [START readingData]
-            homeLogs = p.apply(TextIO.read().from(options.getHomeLogSource()));
-            browseLogs = p.apply(TextIO.read().from(options.getBrowseLogSource()));
+//            homeLogs = p.apply(TextIO.read().from(options.getHomeLogSource()));
+//            browseLogs = p.apply(TextIO.read().from(options.getBrowseLogSource()));
             locateLogs = p.apply(TextIO.read().from(options.getLocateLogSource()));
             // [END readingData]
         }
@@ -232,9 +241,9 @@ public class LogAnalyticsPipeline {
          */
         // [START flattenCollections]
         PCollection<String> allLogs = PCollectionList
-                .of(homeLogs)
-                .and(browseLogs)
-                .and(locateLogs)
+                .of(locateLogs)
+//                .and(browseLogs)
+//                .and(locateLogs)
                 .apply(Flatten.<String>pCollections());
         // [END flattenCollections]
 
@@ -251,6 +260,8 @@ public class LogAnalyticsPipeline {
                 .apply(Window.<LogMessage>into(FixedWindows.of(Duration.standardDays(1))));
         // [END applyWindowing]
 
+        //language=RegExp
+        String foo = "\\[GIN\\]\\s+(?<timestamp>\\d{4}/\\d{2}/\\d{2} \\- \\d{2}\\:\\d{2}\\:\\d{2}).*? (?<httpStatusCode>\\d{3}) .*?(?<responseTime>\\d+\\.?\\d*)(?<resolution>\\S{1,}) \\| (?<source>[0-9\\.:]+?) \\|\\S+?\\s+?\\S+?\\s+?(?<httpMethod>\\w+?)\\s+?(?<destination>[a-z0-9/]+)";
         /*
           Transform "allLogs" PCollection<LogMessage> to PCollection<TableRow>
          */
@@ -265,6 +276,13 @@ public class LogAnalyticsPipeline {
         TableSchema allLogsTableSchema = TableRowOutputTransform.createTableSchema(options.getAllLogsTableSchema());
         // [START allLogsToBigQuery]
         logsAsTableRows.apply(BigQueryIO.<TableRow>write()
+                .withFormatFunction(new SimpleFunction<TableRow, TableRow>() {
+                    @Override
+                    public TableRow apply(TableRow input) {
+                        return input;
+//                        return super.apply(input);
+                    }
+                })
                 .to(options.getAllLogsTableName())
                 .withSchema(allLogsTableSchema)
                 .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_APPEND)
@@ -278,7 +296,8 @@ public class LogAnalyticsPipeline {
          */
         PCollection<KV<String, Double>> destResponseTimeCollection = allLogMessagesDaily
                 .apply(ParDo.of(new DoFn<LogMessage, KV<String, Double>>() {
-                    //              @Override
+
+                    @ProcessElement
                     public void processElement(ProcessContext processContext) throws Exception {
                         LogMessage l = processContext.element();
                         processContext.output(KV.of(l.getDestination(), l.getResponseTime()));
@@ -300,6 +319,8 @@ public class LogAnalyticsPipeline {
                 .apply(Mean.<String, Double>perKey());
         // [END computeAggregations]
 
+
+        // see https://beam.apache.org/releases/javadoc/2.3.0/org/apache/beam/sdk/io/gcp/bigquery/BigQueryIO.html
         PCollection<TableRow> destMaxRespTimeRows = destMaxRespTime
                 .apply(new TableRowOutputTransform(options.getMaxRespTimeTableSchema(), options.getMaxRespTimeTableName()));
 
