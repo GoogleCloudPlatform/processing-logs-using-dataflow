@@ -131,13 +131,17 @@ case "$MODE" in
                 # For each microservice, set up Stackdriver Logging exports
                 echo -n "* Creating Log Export sinks..."
                 for s in ${SERVICE_NAMES[@]}; do
+                    #eg s=sample-home-service
                     gcloud beta logging sinks create ${s} \
                     storage.googleapis.com/${GCS_BUCKET} \
                     --log-filter="resource.type=\"container\" \"${s}\"" \
                     --project=${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error creating Log Export sinks"
 
-                    # TODO we need to grant the associcated service account access to the bucket
+                    # we need to grant the associcated service account access to the bucket
+                    serviceAccount=$(gcloud beta logging sinks describe --format "value[](writerIdentity)"  ${s} | sed 's/serviceAccount://g')
+                    gsutil acl ch -u ${serviceAccount}:W gs://${GCS_BUCKET
+                    }
                 done
                 echo "done"
                 ;;
