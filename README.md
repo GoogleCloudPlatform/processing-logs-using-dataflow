@@ -249,9 +249,16 @@ Next, Run the pipeline. Replace `${BUCKET_NAME}` with the same name you used for
 
 
 
-This command builds the code for the Cloud Dataflow pipeline, uploads it to the specified staging area, and launches the job. To see all options available for this pipeline, run the following command:
+This command builds the code for the Cloud Dataflow pipeline, uploads it to the specified staging area, and launches the job. Since we're using legacy APIs we need to point it to some credentials (see https://cloud.google.com/storage/docs/reference/libraries#setting_up_authentication). To see all options available for this pipeline, run the following command:
 
-    $ ./pipeline.sh
+```
+
+export GOOGLE_APPLICATION_CREDENTIALS="[PATH]"
+
+./pipeline.sh
+```
+
+This is the compute graph
 
 
 To run locally we can use a direct runner:
@@ -279,6 +286,11 @@ After the job has completed, you can see the output in the [BigQuery console](ht
 
 ```bash
 open https://console.cloud.google.com/bigquery?project=${PROJECT_ID}
+```
+
+And run quries, e.g.
+```sql
+SELECT destination, count(destination) FROM `new-logs-demo.new_logs_demo_bq_data.all_logs_table` GROUP BY destination LIMIT 1000
 ```
 
 ## Cleaning Up
