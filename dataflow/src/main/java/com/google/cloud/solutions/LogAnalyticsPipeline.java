@@ -220,8 +220,8 @@ public class LogAnalyticsPipeline {
          */
         if (options.isStreaming()) {
             outputWithTimestamp = false;
-//            homeLogs = p.apply(PubsubIO.readStrings().fromSubscription(options.getHomeLogSource()));
-//            browseLogs = p.apply(PubsubIO.readStrings().fromSubscription(options.getBrowseLogSource()));
+            homeLogs = p.apply(PubsubIO.readStrings().fromSubscription(options.getHomeLogSource()));
+            browseLogs = p.apply(PubsubIO.readStrings().fromSubscription(options.getBrowseLogSource()));
             locateLogs = p.apply(PubsubIO.readStrings().fromSubscription(options.getLocateLogSource()));
         }
         /*
@@ -230,8 +230,8 @@ public class LogAnalyticsPipeline {
         else {
             outputWithTimestamp = true;
             // [START readingData]
-//            homeLogs = p.apply(TextIO.read().from(options.getHomeLogSource()));
-//            browseLogs = p.apply(TextIO.read().from(options.getBrowseLogSource()));
+            homeLogs = p.apply(TextIO.read().from(options.getHomeLogSource()));
+            browseLogs = p.apply(TextIO.read().from(options.getBrowseLogSource()));
             locateLogs = p.apply(TextIO.read().from(options.getLocateLogSource()));
             // [END readingData]
         }
@@ -241,9 +241,9 @@ public class LogAnalyticsPipeline {
          */
         // [START flattenCollections]
         PCollection<String> allLogs = PCollectionList
-                .of(locateLogs)
-//                .and(browseLogs)
-//                .and(locateLogs)
+                .of(homeLogs)
+                .and(browseLogs)
+                .and(locateLogs)
                 .apply(Flatten.<String>pCollections());
         // [END flattenCollections]
 
