@@ -15,9 +15,15 @@
 
 set -e
 
-MACHINE_TYPE=g1-small
 ZONE=us-central1-f
-NUM_NODES=1
+
+MACHINE_TYPE=f1-micro
+NUM_NODES=3
+
+#MACHINE_TYPE=g1-small
+#MACHINE_TYPE=n1-standard-1
+#NUM_NODES=1
+
 PROJECT_ID=${1}
 CLUSTER_NAME=${2}
 COMMAND=${3}
@@ -41,8 +47,8 @@ fi
 case "$COMMAND" in
     up )
         echo "* Creating Google Container Engine cluster ${CLUSTER_NAME} under project ${PROJECT_ID}..."
+        #          --scopes monitoring,logging-write \
         gcloud container clusters create ${CLUSTER_NAME} \
-          --scopes monitoring,logging-write \
           --project ${PROJECT_ID} \
           --machine-type ${MACHINE_TYPE} \
           --zone ${ZONE} \
@@ -52,7 +58,8 @@ case "$COMMAND" in
 
         echo -e "\n* Deploying microservices Replication Controllers..."
         for f in `ls kubernetes/*-controller.yaml`; do
-            kubectl create -f $f
+            # DEBUG f=kubernetes/browse-controller.yaml
+            envsubst < $f | kubectl create -f -
         done
 
         echo -e "\n* Deploying microservices Services..."

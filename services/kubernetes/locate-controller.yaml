@@ -33,7 +33,9 @@ spec:
     spec:
       containers:
         - name: sample-locate-service
-          image: gcr.io/cloud-solutions-images/sample-locate-service:latest
+          ## note that kubectl will not perform this variable substiution
+          ## see https://serverfault.com/questions/791715/using-environment-variables-in-kubernetes-deployment-spec
+          image: gcr.io/${PROJECT_ID}/sample-locate-service:latest
           ports:
             - name: locate-http
               containerPort: 8200

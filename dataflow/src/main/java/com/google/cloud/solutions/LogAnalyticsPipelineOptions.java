@@ -15,9 +15,9 @@ limitations under the License.
 
 package com.google.cloud.solutions;
 
-import com.google.cloud.dataflow.sdk.options.DataflowPipelineOptions;
-import com.google.cloud.dataflow.sdk.options.Default;
-import com.google.cloud.dataflow.sdk.options.Description;
+import org.apache.beam.runners.dataflow.options.DataflowPipelineOptions;
+import org.apache.beam.sdk.options.Default;
+import org.apache.beam.sdk.options.Description;
 
 @SuppressWarnings("unused")
 public interface LogAnalyticsPipelineOptions extends DataflowPipelineOptions {
@@ -34,7 +34,7 @@ public interface LogAnalyticsPipelineOptions extends DataflowPipelineOptions {
     void setLocateLogSource(String locateLogSource);
 
     @Description("Regular expression pattern used to parse embedded log messages inside Cloud Logging entries")
-    @Default.String("\\[GIN\\]\\s+(?<timestamp>\\d{4}/\\d{2}/\\d{2} \\- \\d{2}\\:\\d{2}\\:\\d{2}).*? (?<httpStatusCode>\\d{3}) .*?(?<responseTime>\\d+\\.?\\d*)(?<resolution>\\S{1,}) \\| (?<source>[0-9\\.:]+?) \\|\\S+?\\s+?\\S+?\\s+?(?<httpMethod>\\w+?)\\s+?(?<destination>[a-z0-9/]+)")
+    @Default.String(value = "\\[GIN\\]\\s+(?<timestamp>\\d{4}/\\d{2}/\\d{2} \\- \\d{2}\\:\\d{2}\\:\\d{2}).*? (?<httpStatusCode>\\d{3}) .*?(?<responseTime>\\d+\\.?\\d*)(?<resolution>\\S{1,}) \\|\\s+(?<source>[0-9\\.:]+)\\s\\|\\s(?<httpMethod>[A-Z]+)\\s*(?<destination>[a-z0-9/]+)")
     String getLogRegexPattern();
     void setLogRegexPattern(String logRegexPattern);
 

@@ -22,15 +22,15 @@ build:
 
 image:
 	$(foreach s, $(services), \
-		docker build -t crcsmnky/sample-$(s)-service $(s) ;)
+		docker build -t ${USER}/sample-$(s)-service $(s) ;)
 
 tag:
 	$(foreach s, $(services), \
-		docker tag -f crcsmnky/sample-$(s)-service gcr.io/$(project)/sample-$(s)-service ;)
+		docker tag ${USER}/sample-$(s)-service gcr.io/${PROJECT_ID}/sample-$(s)-service ;)
 
 push:
 	$(foreach s, $(services), \
-		gcloud docker --project $(project) push gcr.io/$(project)/sample-$(s)-service ;)
+		docker push gcr.io/${PROJECT_ID}/sample-$(s)-service ;)
 
 clean:
 	$(foreach s, $(services), \

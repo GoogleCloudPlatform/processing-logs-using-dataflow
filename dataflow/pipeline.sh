@@ -42,10 +42,12 @@ case "$COMMAND" in
         -Dexec.args="\
         --project=${PROJECT_ID} \
         --stagingLocation=gs://${BUCKET_NAME}/staging \
-        --runner=BlockingDataflowPipelineRunner \
+        --runner=DataflowRunner \
         --homeLogSource=gs://${BUCKET_NAME}/sample-home-service/*/*/*/*.json \
         --browseLogSource=gs://${BUCKET_NAME}/sample-browse-service/*/*/*/*.json \
         --locateLogSource=gs://${BUCKET_NAME}/sample-locate-service/*/*/*/*.json \
+        --gcpTempLocation=gs://${BUCKET_NAME}/temp \
+        --tempLocation=gs://${BUCKET_NAME}/temp \
         --allLogsTableName=${DATASET_NAME}.all_logs_table \
         --maxRespTimeTableName=${DATASET_NAME}.max_response_time_table \
         --meanRespTimeTableName=${DATASET_NAME}.mean_response_time_table"        
