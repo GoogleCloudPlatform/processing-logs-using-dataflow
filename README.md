@@ -258,22 +258,6 @@ export GOOGLE_APPLICATION_CREDENTIALS="[PATH]"
 ./pipeline.sh
 ```
 
-This is the compute graph
-
-
-To run locally we can use a direct runner:
-```bash
-mvn compile exec:java \
-    -Dexec.mainClass=com.google.cloud.solutions.LogAnalyticsPipeline \
-    -Dexec.args="--project=new-logs-demo --stagingLocation=gs://new-logs-demo-data-bucket/staging --runner=DirectRunner --homeLogSource=gs://new-logs-demo-data-bucket/sample-home-service/*/*/*/*.json --browseLogSource=gs://new-logs-demo-data-bucket/sample-browse-service/*/*/*/*.json --locateLogSource=gs://new-logs-demo-data-bucket/sample-locate-service/*/*/*/*.json --tempLocation=gs://new-logs-demo-data-bucket/temp --allLogsTableName=new_logs_demo_bq_data.all_logs_table --maxRespTimeTableName=new_logs_demo_bq_data.max_response_time_table --meanRespTimeTableName=new_logs_demo_bq_data.mean_response_time_table "
-```
-In case  it errors with
-```
-DataflowRunner requires gcpTempLocation, but failed to retrieve a value from PipelineOptions: Unable to get application default credentials. Please see https://developers.google.com/accounts/docs/application-default-credentials
-```
-you need to login with `gcloud auth application-default login`
-
-
 ### Monitoring the pipeline
 
 While the pipeline is running, you can see its status in the [Google Developers Console](https://console.developers.google.com). Navigate to **Dataflow** and then click the running job ID. You can see a graphical rendering of the pipeline and examine job logging output along with information about each pipeline stage. Here is an example screenshot of a running Cloud Dataflow job:
