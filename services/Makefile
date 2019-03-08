@@ -11,27 +11,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: build image tag push
 
-services = home browse locate
-project = cloud-solutions-images
+SERVICES = home browse locate
+GCR_PROJECT = cloud-solutions-images
+APPLICATION = processing-logs-at-scale
+
+all:  image tag push
+
+.PHONY: all
 
 build:
-	$(foreach s, $(services), \
+	$(foreach s, $(SERVICES), \
 		GOOS=linux go build -o $(s)/$(s)-service $(s)/$(s)-service.go ;)	
 
 image:
-	$(foreach s, $(services), \
-		docker build -t crcsmnky/sample-$(s)-service $(s) ;)
+	$(foreach s, $(SERVICES), \
+		docker build -t $(APPLICATION)-$(s)-service $(s) ;)
 
 tag:
-	$(foreach s, $(services), \
-		docker tag -f crcsmnky/sample-$(s)-service gcr.io/$(project)/sample-$(s)-service ;)
+	$(foreach s, $(SERVICES), \
+		docker tag $(APPLICATION)-$(s)-service gcr.io/$(GCR_PROJECT)/$(APPLICATION)-$(s)-service ;)
 
 push:
-	$(foreach s, $(services), \
-		gcloud docker --project $(project) push gcr.io/$(project)/sample-$(s)-service ;)
+	$(foreach s, $(SERVICES), \
+		docker push gcr.io/$(GCR_PROJECT)/$(APPLICATION)-$(s)-service ;)
 
 clean:
-	$(foreach s, $(services), \
+	$(foreach s, $(SERVICES), \
 		rm $(s)/$(s)-service ;)
