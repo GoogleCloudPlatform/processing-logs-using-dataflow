@@ -19,6 +19,7 @@ COMMAND=${4}
 PROJECT_ID=${1}
 DATASET_NAME=${2}
 BUCKET_NAME=${3}
+REGION=${REGION:-us-east1}
 
 function usage
 {
@@ -41,11 +42,12 @@ case "$COMMAND" in
         -Dexec.mainClass=com.google.cloud.solutions.LogAnalyticsPipeline \
         -Dexec.args="\
         --project=${PROJECT_ID} \
+        --region=${REGION} \
         --stagingLocation=gs://${BUCKET_NAME}/staging \
-        --runner=BlockingDataflowPipelineRunner \
-        --homeLogSource=gs://${BUCKET_NAME}/sample-home-service/*/*/*/*.json \
-        --browseLogSource=gs://${BUCKET_NAME}/sample-browse-service/*/*/*/*.json \
-        --locateLogSource=gs://${BUCKET_NAME}/sample-locate-service/*/*/*/*.json \
+        --runner=DataflowRunner \
+        --homeLogSource=gs://${BUCKET_NAME}/home-service/*/*/*/*.json \
+        --browseLogSource=gs://${BUCKET_NAME}/browse-service/*/*/*/*.json \
+        --locateLogSource=gs://${BUCKET_NAME}/locate-service/*/*/*/*.json \
         --allLogsTableName=${DATASET_NAME}.all_logs_table \
         --maxRespTimeTableName=${DATASET_NAME}.max_response_time_table \
         --meanRespTimeTableName=${DATASET_NAME}.mean_response_time_table"        

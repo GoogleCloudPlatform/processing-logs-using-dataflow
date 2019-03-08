@@ -1,0 +1,26 @@
+{
+    "insertId": "ugjuig3j77zdi",
+    "labels": {
+        "compute.googleapis.com/resource_name": "fluentd-gcp-v3.2.0-9q4tr",
+        "container.googleapis.com/namespace_name": "default",
+        "container.googleapis.com/pod_name": "browse-service-rm7v9",
+        "container.googleapis.com/stream": "stdout"
+    },
+    "logName": "projects/processing-logs-at-scale/logs/browse-service",
+    "receiveTimestamp": "2019-03-09T00:33:30.489218596Z",
+    "resource": {
+        "labels": {
+            "cluster_name": "cluster-processing-logs-using-dataflow",
+            "container_name": "browse-service",
+            "instance_id": "640697565266753757",
+            "namespace_id": "default",
+            "pod_id": "browse-service-rm7v9",
+            "project_id": "processing-logs-at-scale",
+            "zone": "us-east1-d"
+        },
+        "type": "container"
+    },
+    "severity": "INFO",
+    "textPayload": "[GIN] 2019/03/09 - 00:33:23 | 200 |     190.726\u00b5s |      10.142.0.6 | GET      /browse/product/1\n",
+    "timestamp": "2019-03-09T00:33:23.743466177Z"
+}

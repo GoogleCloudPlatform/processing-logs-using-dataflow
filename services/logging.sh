@@ -30,7 +30,7 @@ function error_exit
 
 function usage
 {
-    echo "logging.sh PROJECT_ID BUCKET_NAME [streaming|batch] [up|down]"
+    echo "$(basename $0) [PROJECT_ID] [BUCKET_NAME] [streaming|batch] [up|down]"
     echo -e "\nScript will fail with existing buckets, please supply a new BUCKET_NAME"
 }
 
@@ -57,7 +57,7 @@ case "$MODE" in
             up )
                 echo -n "* Creating Pub/Sub topics..."
                 for s in ${SERVICE_NAMES[@]}; do 
-                    gcloud alpha pubsub topics create ${s} \
+                    gcloud pubsub topics create ${s} \
                     --project ${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error creating Pub/Sub topics"
                 done
@@ -65,7 +65,7 @@ case "$MODE" in
 
                 echo -n "* Creating Pub/Sub subscriptions..."
                 for s in ${SERVICE_NAMES[@]}; do 
-                    gcloud alpha pubsub subscriptions create ${s} \
+                    gcloud pubsub subscriptions create ${s} \
                     --topic ${s} \
                     --project ${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error creating Pub/Sub subscriptions"
@@ -74,9 +74,9 @@ case "$MODE" in
 
                 echo -n "* Creating Log Export sinks..."
                 for s in ${SERVICE_NAMES[@]}; do
-                    gcloud beta logging sinks create ${s} \
+                    gcloud logging sinks create ${s} \
                     pubsub.googleapis.com/projects/${PROJECT_ID}/topics/${s} \
-                    --log="${s}" \
+                    --log-filter="${s}" \
                     --project=${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error creating Log Export sinks"
                 done
@@ -85,8 +85,8 @@ case "$MODE" in
             down )
                 echo -n "* Deleting Log Export sinks..."
                 for s in ${SERVICE_NAMES[@]}; do
-                    gcloud beta logging sinks delete ${s} \
-                    --log="${s}" \
+                    gcloud logging sinks delete ${s} \
+                    --log-filter="${s}" \
                     --project=${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error deleting Log Export sinks"
                 done                    
@@ -94,7 +94,7 @@ case "$MODE" in
                 
                 echo -n "* Deleting Pub/Sub subscriptions..."
                 for s in ${SERVICE_NAMES[@]}; do
-                    gcloud alpha pubsub subscriptions delete ${s} \
+                    gcloud pubsub subscriptions delete ${s} \
                     --project=${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error deleting Pub/Sub subscriptions"
                 done
@@ -102,7 +102,7 @@ case "$MODE" in
                 
                 echo -n "* Deleting Pub/Sub topics..."
                 for s in ${SERVICE_NAMES[@]}; do
-                    gcloud alpha pubsub topics delete ${s} \
+                    gcloud pubsub topics delete ${s} \
                     --project=${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error deleting Pub/Sub topics"
                 done
@@ -125,9 +125,9 @@ case "$MODE" in
 
                 echo -n "* Creating Log Export sinks..."
                 for s in ${SERVICE_NAMES[@]}; do
-                    gcloud beta logging sinks create ${s} \
+                    gcloud logging sinks create ${s} \
                     storage.googleapis.com/${GCS_BUCKET} \
-                    --log="${s}" \
+                    --log-filter="${s}" \
                     --project=${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error creating Log Export sinks"
                 done
@@ -136,8 +136,7 @@ case "$MODE" in
             down )
                 echo -n "* Deleting Log Export sinks..."
                 for s in ${SERVICE_NAMES[@]}; do
-                    gcloud beta logging sinks delete ${s} \
-                    --log="${s}" \
+                    gcloud logging sinks delete ${s} \
                     --project=${PROJECT_ID} \
                     --quiet >/dev/null || error_exit "Error deleting Log Export Sinks"
                 done
