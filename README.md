@@ -22,8 +22,8 @@ After installing the Google Cloud SDK, run `gcloud components update` to install
 
 Set your preferred zone and project:
 
-    $ gcloud config set compute/zone ZONE
-    $ gcloud config set project PROJECT-ID
+    $ gcloud config set compute/zone [ZONE]
+    $ gcloud config set project [YOUR-PROJECT-ID]
 
 Ensure the following APIs are enabled in the [Google Cloud Console](https://console.developers.google.com/). Navigate to **API Manager** and enable:
 
@@ -44,11 +44,11 @@ In the `services` folder, there are several scripts you can use to facilitate de
 
 First, change the current directory to `services`:
 
-    $ cd dataflow-log-analytics/services
+    $ cd processing-logs-using-dataflow/services
 
 Next, deploy the Container Engine cluster with the sample web applications:
 
-    $ ./cluster.sh PROJECT-ID CLUSTER-NAME up
+    $ ./cluster.sh [YOUR-PROJECT-ID] [CLUSTER-NAME] up
 
 The script will deploy a single-node Container Engine cluster, deploy the web applications, and expose the applications as Kubernetes services.
 
@@ -56,13 +56,13 @@ The script will deploy a single-node Container Engine cluster, deploy the web ap
 
 The next step is to configure Cloud Logging to export the web application logs to Google Cloud Storage. The following script first creates a Cloud Storage bucket, configures the appropriate permissions, and sets up automated export from the web applications to Cloud Storage. **Note:** the `BUCKET-NAME` should not be an existing Cloud Storage bucket.
 
-    $ ./logging.sh PROJECT-ID BUCKET-NAME batch up
+    $ ./logging.sh [YOUR-PROJECT-ID] [BUCKET-NAME] batch up
 
 ### Generate requests
 
 Now that the applications have been deployed and are logging through Cloud Logging, you can use the following script to generate requests against the applications:
 
-    $ ./load.sh REQUESTS CONCURRENCY
+    $ ./load.sh [REQUESTS] [CONCURRENCY]
 
 This script uses Apache Bench [ab](https://httpd.apache.org/docs/2.2/programs/ab.html) to generate load against the deployed web applications. `REQUESTS` controls how many requests are issued to each application and `CONCURRENCY` controls how many concurrent requests are issued. The logs from the applications are sent to Cloud Storage in hourly batches, and it can take up to two hours before log entries start to appear. For more information, see the [Cloud Logging documentation](https://cloud.google.com/logging/docs/export/using_exported_logs).
 
@@ -80,17 +80,17 @@ The following diagram shows the structure and flow of the example Dataflow pipel
 
 Before deploying the pipeline, create the BigQuery dataset where output from the Cloud Dataflow pipeline will be stored:
 
-    $ gcloud alpha bigquery datasets create DATASET-NAME
+    $ bq mk [DATASET-NAME]
 
 ### Run the pipeline
 
 First, change the current directory to `dataflow`:
 
-    $ cd dataflow-log-analytics/dataflow
+    $ cd processing-logs-using-dataflow/dataflow
 
 Next, Run the pipeline. Replace `BUCKET-NAME` with the same name you used for the logging setup:
 
-    $ ./pipeline.sh PROJECT-ID DATASET-NAME BUCKET-NAME run
+    $ ./pipeline.sh [YOUR-PROJECT-ID] [DATASET-NAME] [BUCKET-NAME] run
 
 This command builds the code for the Cloud Dataflow pipeline, uploads it to the specified staging area, and launches the job. To see all options available for this pipeline, run the following command:
 
@@ -112,14 +112,14 @@ To clean up and remove all resources used in this example:
 
 1. Delete the BigQuery dataset:
 
-        $ gcloud alpha bigquery datasets delete DATASET-NAME
+        $ bq rm [DATASET-NAME]
 
 1. Deactivate the Cloud Logging exports. This step deletes the exports and the specified Cloud Storage bucket:
 
-        $ cd dataflow-log-analytics/services
-        $ ./logging.sh PROJECT-ID BUCKET-NAME batch down
+        $ cd processing-logs-using-dataflow/services
+        $ ./logging.sh [YOUR-PROJECT-ID] [BUCKET-NAME] batch down
 
 1. Delete the Container Engine cluster used to run the sample web applications:
 
-        $ cd dataflow-log-analytics/services
-        $ ./cluster.sh PROJECT-ID CLUSTER-NAME down
+        $ cd processing-logs-using-dataflow/services
+        $ ./cluster.sh [YOUR-PROJECT-ID] [CLUSTER-NAME] down
