@@ -32,8 +32,8 @@ spec:
         # version: 1.0
     spec:
       containers:
-        - name: sample-home-service
-          image: gcr.io/cloud-solutions-images/sample-home-service:latest
+        - name: home-service
+          image: gcr.io/cloud-solutions-images/processing-logs-at-scale-home-service:latest
           ports:
             - name: home-http
               containerPort: 8000

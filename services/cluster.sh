@@ -16,11 +16,11 @@
 set -e
 
 MACHINE_TYPE=g1-small
-ZONE=us-central1-f
 NUM_NODES=1
 PROJECT_ID=${1}
 CLUSTER_NAME=${2}
 COMMAND=${3}
+REGION=${REGION:-us-east1}
 
 function error_exit
 {
@@ -45,7 +45,7 @@ case "$COMMAND" in
           --scopes monitoring,logging-write \
           --project ${PROJECT_ID} \
           --machine-type ${MACHINE_TYPE} \
-          --zone ${ZONE} \
+          --region $REGION \
           --num-nodes ${NUM_NODES} \
           --quiet 2>&1 >/dev/null || error_exit "Error creating Google Container Engine cluster"
         echo "done"
@@ -76,7 +76,7 @@ case "$COMMAND" in
         echo "* Deleting Google Container Engine cluster ${CLUSTER_NAME} under project ${PROJECT_ID}..."
         gcloud container clusters delete ${CLUSTER_NAME} \
         --project ${PROJECT_ID} \
-        --zone ${ZONE} \
+        --region $REGION \
         --quiet >/dev/null || error_exit "Error deleting Google Container Engine cluster"
         echo "done"
         ;;

@@ -1,4 +1,4 @@
-# Copyright Google Inc. 2015
+# Copyright Google Inc. 2019
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,10 +11,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM debian:jessie
 
-MAINTAINER Sandeep Parikh <parikhs@google.com>
+# Start by building the application.
+FROM golang as build
 
-COPY home-service /usr/local/bin/
+WORKDIR /go/src/app
+COPY . .
 
-ENTRYPOINT /usr/local/bin/home-service
+RUN go get -d -v ./...
+RUN go install -v ./...
+
+# Now copy it into our base image.
+FROM gcr.io/distroless/base
+
+LABEL authors="Sandeep Parikh <parikhs@google.com>, Drew Stevens <drewstevens@google.com>"
+
+COPY --from=build /go/bin/app /
+CMD ["/app"]
